@@ -1,8 +1,8 @@
 __author__ = 'gallegos'
 
-from pyfits import getdata
 import numpy as np
 import os
+from pyfits import getdata
 from sys import argv
 
 
@@ -29,7 +29,7 @@ def rdarg(argv, key, type=None, default=None, listtype=int):
 	if default is not None: return default
 
 
-cube = rdarg(argv, 'cube', str, '')
+cube = rdarg(argv, 'name', str, '')
 std = rdarg(argv, 'std', float, None)
 bin = rdarg(argv, 'bin', int, 1)
 dim = rdarg(argv, 'dim', int, 0)
