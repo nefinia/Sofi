@@ -7,7 +7,7 @@ from tools_sofi import astroim, rdarg, stack, pdfim, analysis
 from sys import argv
 from random import randint
 
-if 0:
+if 1:
     fitcat = rdarg(argv, key='fitcat', type=str, default='all')  # 'all'#'HDFS'
     folder = rdarg(argv, 'folder', str, '../../')  # '/scratch/gallegos/MUSE/'
 
@@ -18,7 +18,7 @@ if 0:
         ids2 = data['id2']
 
         laedata = getdata('%s/%s/cats/laes.fits' % (folder, 'HDFS'), 1)
-        flae = laedata['Luminosity']
+        flae = laedata['LYALPHA_LUM']
         idlae = laedata['ID']
 
         zs = laedata['Z']
@@ -48,9 +48,9 @@ if 0:
         ids2 = np.concatenate((ids2, data['id2']), 0)
 
         laedata = getdata('%s/%s/cats/laes.fits' % (folder, 'UDF'), 1)
-        flaes = np.concatenate((flae, laedata['Luminosity']))
+        flaes = np.concatenate((flae, laedata['LYALPHA_LUM']))
         idlaes = np.concatenate((idlae, laedata['ID']))
-        flae = laedata['Luminosity']
+        flae = laedata['LYALPHA_LUM']
         idlae = laedata['ID']
         zs = np.concatenate((zs, laedata['Z_MUSE']))
 
@@ -92,20 +92,21 @@ if 0:
         if fitcat == 'UDF':
             zs = laedata['Z_MUSE']
         else:
-            zs = laedata['Z']
-        flae = laedata['Luminosity']
-        flux_lae1 = []
-        flux_lae2 = []
-        for i, j in zip(ids1.astype(int), ids2.astype(int)):
-            if len(flae[idlae == i]) > 0:
-                flux_lae1.append(np.float(flae[idlae == i]))
-            else:
-                flux_lae1.append(np.nan)
+            zs = laedata['redshift']
+        if 1:
+            flae = laedata['LYALPHA_LUM']
+            flux_lae1 = []
+            flux_lae2 = []
+            for i, j in zip(ids1.astype(int), ids2.astype(int)):
+                if len(flae[idlae == i]) > 0:
+                    flux_lae1.append(np.float(flae[idlae == i]))
+                else:
+                    flux_lae1.append(np.nan)
 
-            if len(flae[idlae == j]) > 0:
-                flux_lae2.append(np.float(flae[idlae == j]))
-            else:
-                flux_lae2.append(np.nan)
+                if len(flae[idlae == j]) > 0:
+                    flux_lae2.append(np.float(flae[idlae == j]))
+                else:
+                    flux_lae2.append(np.nan)
         pdists = data['x2'] - data['x1']
         zs1 = data['z1']
         zs2 = data['z2']
@@ -114,7 +115,6 @@ if 0:
         theta = data['theta']
         fitcats = [fitcat] * len(data)
 
-if 0:
     ns = []
     h = 'theta '
     hdu = PrimaryHDU()
@@ -138,7 +138,7 @@ if 0:
         zs1 = np.concatenate((temp, zs2), 0)
         zs2 = np.concatenate((zs2, temp), 0)
         npairs = np.concatenate((npairs1, npairs2), 0)
-        np.savetxt('%s/%s/cats/lae_npairs.dat' % (folder, fitcat), (npairs), fmt='%d')
+        #np.savetxt('%s/%s/cats/lae_npairs.dat' % (folder, fitcat), (npairs), fmt='%d')
 
     # specially discarded: 97-138 137-170 170-137 238-563
     dmin = .5
@@ -162,26 +162,37 @@ if 0:
     # & (flux_lae1 >= fmin) & (flux_lae2 >= fmin)
     # from scipy import stats
 
-    mflux = np.nanmedian(flux_lae1[close])
-    print mflux
-    mred = np.nanmedian(redshift[close])
-    print mred
-    mtheta = np.nanmedian(theta[close])
-    print mtheta
-    mdists = np.nanmedian(dists[close])
-    print mdists
-    mnpairs = np.nanmedian(npairs[close])
-    print mnpairs
+    try:
+        from scipy import stats
+        mflux = stats.nanmedian(flux_lae1[close])
+        mred = stats.nanmedian(redshift[close])
+        mtheta = stats.nanmedian(theta[close])
+        mdists = stats.nanmedian(dists[close])
+        mnpairs = stats.nanmedian(npairs[close])
+    except AttributeError:
+        mflux = np.nanmedian(flux_lae1[close])
+        mred = np.nanmedian(redshift[close])
+        mtheta = np.nanmedian(theta[close])
+        mdists = np.nanmedian(dists[close])
+        mnpairs = np.nanmedian(npairs[close])
 
-if 1:
-    "median will all number of pairs and no rejected subcubes"
-    mflux = 181.82522583
-    mred = 3.47335
-    mtheta = 31.732
-    mdists = 7.78095
-    mnpairs = 6.0
+    print 'Luminosity:', mflux
+    print 'redshift', mred
+    print 'Projected distance: ', mtheta
+    print 'Comoving distance: ', mdists
+    print 'Number of neighbors', mnpairs
 
-if 0:
+pdmin = 16
+
+if pdmin==16:
+    "median will all number of pairs and no rejected subcubes theta>16"
+    mflux = 91.0415050986#30 # now is luminosity! 29.53166
+    mred = 3.47385#3.47268
+    mtheta = 32.586#32.0235
+    mdists = 8.1767#7.78095
+    mnpairs = 8.#6.0
+
+if pdmin==0:
     "median will npairs>=6"
     mflux = 167.97416687
     mred = 3.7075
@@ -189,42 +200,80 @@ if 0:
     mdists = 7.7093
     mnpairs = 9.0
 
-s = "python stack.py -tests True -random True -overwrite False -randflipy False -makepdf False -reject False -makeim True -ntest 300 "
 
-extraname = "meancorr"
+if pdmin==6:
+    "median will the full sample theta>6 arcsec"
+    mflux = 91.0415050986#now is luminosity!
+    mred = 3.47685
+    mtheta = 32.586
+    mdists = 7.9809
+    mnpairs = 9.
 
-if 1:
+if pdmin==10:
+    "median will the full sample theta>10 arcsec"
+    mflux = 91.0415050986#now is luminosity!
+    mred = 3.47685
+    mtheta = 29.6
+    mdists = 8.19
+    mnpairs = 9.
+
+def run(s, mnpairs, mtheta, mdists, mred, mflux):
     os.system(s + ' &')
-    os.system(s + "-nmin %d -extraname _nmin%d.%s.half &" % (mnpairs, mnpairs, extraname))
-    os.system(s + "-nmax %d -extraname _nmax%d.%s.half &" % (mnpairs, mnpairs, extraname))
-    os.system(s + "-pdmin %f -extraname .%s.half &" % (mtheta, extraname))
-    os.system(s + "-pdmax %f -extraname .%s.half &" % (mtheta, extraname))
-    os.system(s + "-dmin %f -extraname .%s.half &" % (mdists, extraname))
-    os.system(s + "-dmax %f -extraname .%s.half &" % (mdists, extraname))
-    os.system(s + "-rmin %f -extraname .%s.half &" % (mred, extraname))
-    os.system(s + "-rmax %f -extraname .%s.half &" % (mred, extraname))
-    # os.system(s + "-lmin %f -extraname .half &" % mflux)
-    # os.system(s + "-lmax %f -extraname .half &" % mflux)
+    os.system(s + " -nmin %d&" % (mnpairs))
+    os.system(s + " -nmax %d&" % (mnpairs))
+    os.system(s + " -pdmin %f&" % (mtheta))
+    os.system(s + " -pdmax %f&" % (mtheta))
+    os.system(s + " -dmin %f&" % (mdists))
+    os.system(s + " -dmax %f&" % (mdists))
+    os.system(s + " -rmin %f&" % (mred))
+    os.system(s + " -rmax %f&" % (mred))
+    os.system(s + " -lmin %f&" % mflux)
+    os.system(s + " -lmax %f&" % mflux)
 
-if 1:
-    for i in np.arange(9) + 1:
-        os.system(s + "-nmin %d -nmax %d -extraname _nmin%d_nmax%d.%s &" % (i, i + 2, i, i + 1, extraname))
+s = "python stack.py -tests True -random True -overwrite True -randflipy False -makepdf True -reject False -makeim True "
+
+if 0:
+    run(s, mnpairs, mtheta, mdists, mred, mflux)
+    #os.system("python stack.py -overwrite True -imtype median -extraname .median -randflipy True -makepdf True -reject False -makeim True&")
+
+
+s = "python stack.py -tests True -random True -overwrite False -randflipy False -makepdf True -reject True -makeim True -extraname .reject "
+
+
+if 0:
+    run(s, mnpairs, mtheta, mdists, mred, mflux)
+    #os.system("python stack.py -overwrite True -imtype median -extraname .median -randflipy True -makepdf True -reject False -makeim True&")
+
+
+
+s = "python stack.py -tests True -random True -overwrite True -randflipy True -makepdf True -reject False -makeim True -dosclip False -extraname .nosclip "
+
+
+if 0:
+    os.system(s + '&')
+    os.system("python stack.py -overwrite True -imtype median -extraname .nosclip-median-reject -randflipy True -makepdf True -reject False -makeim True -dosclip False&")
+    os.system("python stack.py -overwrite True -reject True -extraname .nosclip-reject -randflipy True -makepdf True -makeim True -dosclip False&")
+    os.system(s + "-nmin %d&" % (mnpairs))
+    os.system(s + "-nmax %d&" % (mnpairs))
+    #os.system(s + "-pdmin %f&" % (mtheta))
+    #os.system(s + "-pdmax %f&" % (mtheta))
+    os.system(s + "-dmin %f&" % (mdists))
+    os.system(s + "-dmax %f&" % (mdists))
+    #os.system(s + "-rmin %f&" % (mred))
+    #os.system(s + "-rmax %f&" % (mred))
+    os.system(s + "-lmin %f&" % mflux)
+    os.system(s + "-lmax %f&" % mflux)
+
+
+s = "python stack.py -tests True -random True -overwrite True -randflipy True -makepdf True -reject True -makeim True -extraname .reject "
+
+if 0:
+    run(s, mnpairs, mtheta, mdists, mred, mflux)
+
+
+if 0:
+    for i in np.arange(10) + 1:
+        os.system(s + "-nmin %d -nmax %d&" % (i, i + 2))
 
 if 0:
     os.system(s + "-meancorr True -extraname .meancorr")
-
-if 0:
-
-    dl = []
-    dc = []
-    l = []
-    for i in range(len(zs)):
-        from tools_sofi import comdist
-
-        dc.append(comdist(zs[i]))
-        dl.append((1 + zs[i]) * dc[i])
-        l.append(4. * np.pi * dl[i] ** 2 * flux_lae1[i] * 9.521e-14)  # In units of 1e40 ergs/s
-
-    mat = np.array([idlaes, dl, l])
-
-    np.savetxt('%s/%s/cats/lae_lums.dat' % (folder, fitcat), mat.T, fmt='%f', header='ID dl Luminosity')
