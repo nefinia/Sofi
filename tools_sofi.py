@@ -5,13 +5,14 @@ from math import *
 from pyfits import getdata, PrimaryHDU
 import h5py
 import numpy as np
-import os, sys
+import os, sys, time
 from math import sqrt
 import astropy as ap
-from astropy.io import fits
 from pyfits import getdata, PrimaryHDU, getheader
 # from pylab import *
 import scipy.ndimage as ndimage
+import re, gc
+
 
 
 def deg2hms(ra, dec):
@@ -28,6 +29,26 @@ def deg2hms(ra, dec):
 
     print 'ra', ra, '->', ra_hms, 'dec', dec, '->', dec_dms
     return ra_hms, dec_dms
+
+
+def hms2deg(ra, dec):
+    if isinstance(ra, list):
+        ra_deg = []
+        dec_deg = []
+        for rr, dd in zip(ra, dec):
+            r = np.array(rr.split(":")).astype('float')
+            d = np.array(dd.split(":")).astype('float')
+            ds = np.sign(d[0])
+            ra_deg.append(r[0] * 15. + r[1] * .25 + r[2] / 240.)
+            dec_deg.append(d[0] + ds * d[1] / 60 + ds * d[2] / 3600.)
+    else:
+        r = np.array(ra.split(":")).astype('float')
+        d = np.array(dec.split(":")).astype('float')
+        ds = np.sign(d[0])
+        ra_deg = r[0] * 15. + r[1] * .25 + r[2] / 240.
+        dec_deg = d[0] + ds * d[1] / 60 + ds * d[2] / 3600.
+        print 'ra', ra, '->', ra_deg, 'dec', dec, '->', dec_deg
+    return ra_deg, dec_deg
 
 
 def lum_func(imag, mstar, limmag, alpha=-1.):
@@ -83,21 +104,28 @@ def comdist(z, h0=69.6, omega_l=0.714):
 def distance(z1, ra1, dec1, z2, ra2, dec2):
     "Routine to compute several cosmological distances between 2 objects"
 
-    # pi dist will be comoving!
+    # distances are in Mpc!
 
-    zdif = abs(z1 - z2)
-    zmean = (z1 + z2) / 2.
+    #zdif = abs(z1 - z2)
+    #zmean = (z1 + z2) / 2.
     zmin = min(z1, z2)
+    zmax = max(z1, z2)
     cd1 = comdist(z1)
     cd2 = comdist(z2)
-    cdmean = (cd1 + cd2) / 2.
-    cd = min(cd1, cd2)
-    pi_v = zdif * 2.99792458e5
+    #cdmean = (cd1 + cd2) / 2.
+    cdmin = min(cd1, cd2)
+    #redshift between two objects
+    z12 = (1+zmax)/(1+zmin)-1
+    z12p1sqrd = (z12+1)**2
+    c = 2.99792458e5
     pi_Mpc = abs(cd1 - cd2)  # / (1 + zmean)
+    h0 = 69.6
+    omega_l = 0.714
+    pi_v = h0*np.sqrt((1-omega_l)*(1+z12)**3+omega_l)*pi_Mpc#h0*np.sqrt((1-omega_l)*(1+zmin)**3+omega_l)*pi_Mpc#c * (1-z12p1sqrd) / (1+z12p1sqrd)#
     theta = sqrt(
         ((ra1 - ra2) * cos((dec1 + dec2) / 2. * pi / 180.)) ** 2 + (dec1 - dec2) ** 2)  # ang distance in degrees
-    proj_dist = 1000. * theta * pi / 180. * cd / (1. + zmin)
-    # phys_dist = sqrt(pi_Mpc**2+proj_dist**2) #sqrt((pi / 180. * theta * cd / (1 + minz)) ** 2 + cd ** 2)
+    proj_dist = theta * pi / 180. * cdmin / (1. + zmin)
+    # phys_dist = sqrt(pi_Mpc**2+proj_dist**2*1e-6) #sqrt((pi / 180. * theta * cd / (1 + minz)) ** 2 + cd ** 2)
 
     return theta * 3600., cd1, cd2, pi_Mpc, pi_v, proj_dist
 
@@ -267,7 +295,7 @@ def cic(value, x, nx, y=None, ny=1, weighting=True, wraparound=False):
     x1, x2 = findweights(np.asarray(x), nx)
     ind = []
     ind.append([x1, x2])
-    if y != None:
+    if y is not None:
         y1, y2 = findweights(np.asarray(y), ny)
         ind.append([y1, y2])
 
@@ -323,125 +351,229 @@ def makejpeg(im, smooth=True, imout='', cont=False, scalelims=''):
 
 
 def astroim(im, smooth=True, xmin=None, xmax=None, ymin=None, ymax=None,
-            vmin=None, vmax=None, xtmin=0, ytmin=None, contours=False, std=None,
-            fsize=18, cbfrac=.047, pad=.03, dfig=None, cb_label=True,
+            vmin=None, vmax=None, xtmin=0, ytmin=None, contours=False, contoursw=1, std=None,
+            fsize=21, cbfrac=.047, pad=.03, dfig=None, cb_label=True, nbins=6,
             scb_label=r'Flux [$10^{-20}\,\rm{erg/s/cm^2}$]', saveim=False, clabelpad=None, ylabelpad=None,
-            sbfix=False, units='theta', imout=None, show=True, title='', nsigma=6,
-            x0=None, y0=None, res=600, gray=False, interpolation='gaussian', highq=False):
+            sbfix=False, sb=True, units='theta', imout=None, show=True, title='', nsigma=7, text=None, textpos=None,
+            x0=None, y0=None, pcolor='white', psize=50, gray=False, interpolation='gaussian', highq=False, dpi=100,
+            binsize=2, xticks=None, yticks=None, ntx=9, nty=7, pair=False, angle=None, arrow=False, region=None,
+            regcolor='purple', scale=False, rasterize=False, zpw=1.25, xlabel=None, ylabel=None, logscale=False,
+            pix2asec=.2, cbticks=None):
+    from astropy.io import fits as _fits
     import matplotlib.pyplot as plt
     from matplotlib import ticker
     from matplotlib.colors import LinearSegmentedColormap, LogNorm, ListedColormap, BoundaryNorm
 
-    hdu_list = fits.open(im)
+    hdu_list = _fits.open(im)
     image_data = (hdu_list[0].data)[::-1, :]
     mask = np.isnan(image_data)
-    image_data[mask] = 0  # -999
-    image_data[image_data == -999] = 0  # -999
-
+    img = np.copy(image_data)
     if smooth:
-        img = ndimage.gaussian_filter(image_data, sigma=1, order=0)
-    else:
-        img = image_data
+        img[mask] = 0  # -999
+        img[img == -999] = 0  # -999
+        img = ndimage.gaussian_filter(img, sigma=.5, order=0)
+
+    if sb:
+        sbconv = zpw/(binsize*pix2asec)**2
+        img *= sbconv # convert to SB 1.25*zw
 
     if sbfix:
         img /= 100.
     if xmin is None:
         xmin = 0
-        xxmin=0
+        xxmin = 0
     else:
-        xxmin=image_data.shape[1]/2+xmin
+        if pair: xxmin = xmin
+        else: xxmin = image_data.shape[1] / 2 + xmin
     if xmax is None:
         xmax = image_data.shape[1]
-        xxmax=xmax
+        xxmax = xmax
     else:
-        xxmax = image_data.shape[1]/2+xmax
+        if pair: xxmax = xmax
+        else: xxmax = image_data.shape[1] / 2 + xmax
     if ymin is None:
         ymin = 0
         yymin = 0
     else:
-        yymin = image_data.shape[0]/2+ymin
+        if pair: yymin = ymin
+        else: yymin = image_data.shape[0] / 2 + ymin
     if ymax is None:
         ymax = image_data.shape[0]
         yymax = ymax
     else:
-        yymax = image_data.shape[0]/2+ymax
+        if pair: yymax = ymax
+        else: yymax = image_data.shape[0] / 2 + ymax
 
     fig, ax = plt.subplots(figsize=dfig)
-    tn = 10
-    x = xmax - tn * np.arange(xmax / tn + 1) + xmin - .5
-    if xtmin != 0:
-        dxt = xtmin - x[np.where([min(abs(x - xtmin)) == abs(i - xtmin) for i in x])[0]]
-        x += dxt
-    y = ymax - tn * np.arange(ymax / tn + 1) + ymin - .5
 
-    xticks = ((xmax / 2 - x + xmin + .5) * .4).astype(int)[::-1]
-    yticks = ((ymax / 2 - y + ymin + .5) * .4).astype(int)
-    y = ymax - tn * np.arange(ymax / tn + 1) + ymin
+    if rasterize:
+        print 'Rasterizing'
+        ax.set_rasterized(True)
+        ax.set_rasterization_zorder(-1)
+
+    x = np.linspace(xmin, xmax, ntx)
+    y = np.linspace(ymin, ymax, nty)
+    #ymax - dwy * np.arange(ymax / dwy + 1) - .5
+
+    if xticks is None:
+        xticks = (x * pix2asec * binsize).astype(int)+10
+        if pair: xticks -= xticks[0]
+    if yticks is None:
+        yticks = (y * pix2asec * binsize).astype(int)
+        if pair: yticks -= yticks[0]
+
     plt.xlim(xmin, xmax)
     plt.ylim(ymax, ymin)
+
     ax.xaxis.tick_top()
     ax.xaxis.set_label_position('top')
     ax.xaxis.label.set_fontsize(fsize)
     ax.yaxis.label.set_fontsize(fsize)
-    plt.xticks(x, xticks, fontsize=fsize)
-    plt.yticks(y, yticks, fontsize=fsize)
+    plt.xticks(x[1:-1], xticks[1:-1], fontsize=fsize-2)
+    plt.yticks(y[1:-1], yticks[1:-1], fontsize=fsize-2)
     plt.title(title, y=1.14)
-    plt.xlabel(r'$\rm{\theta\,[arcsec]}$', fontsize=fsize)
-    plt.ylabel(r'$\rm{\theta\,[arcsec]}$', fontsize=fsize, labelpad=ylabelpad)
+    if xlabel is None:
+        plt.xlabel(r'$\rm{\theta\,[arcsec]}$', fontsize=fsize)
+    else: plt.xlabel(xlabel, fontsize=fsize)
+    if ylabel is None:
+        plt.ylabel(r'$\rm{\theta\,[arcsec]}$', fontsize=fsize, labelpad=ylabelpad)
+    else: plt.ylabel(ylabel, fontsize=fsize)
 
+    if not isinstance(x0, list):
+        x0 = [x0]
+    if not isinstance(y0, list):
+        y0 = [y0]
     if x0 is not None and y0 is not None:
-        plt.scatter([x0], [y0], marker='x')
+        plt.scatter(x0, y0, marker='x', color=pcolor, s=psize)
 
-    if not std:
+    if std is None:
         rad = 8
-        y, x = np.ogrid[-ymax/2+1: ymax/2+1, -xmax/2+1: xmax/2+1]
+        yd, xd = image_data.shape
+        y, x = np.ogrid[-yd/2+1: yd/2+1, -xd/2+1: xd/2+1]
         mask = x**2 + y**2 > rad**2
-        std = np.nanstd(img[mask])
-        print 'std with sigma clipping', std
-    if vmin is None:
+        std = np.nanstd(image_data[mask])
+    print "std for the image %.3f" % std
+    if vmin is None and std > 0:
         vmin = -nsigma * std
-    if vmax is None:
+    if vmax is None and std > 0:
         vmax = nsigma * std
-    if contours:
-        levels = np.concatenate(((np.arange(nsigma)+1)*std, (np.arange(nsigma*2)**2+nsigma+1)*std))
-        colors = ['white', 'lightgray', 'beige', 'yellow', 'orange', 'red', 'darkred']
-        cset = plt.contour(img[yymin: yymax+1, xxmin: xxmax+1], levels, aspect='auto', colors='grey', extent=[xmin, xmax, ymin, ymax])
-    print nsigma, std, vmin, vmax
-    bounds = ((np.arange(nsigma*2)+1)*std-vmin)/(vmax-vmin)
-    bounds[bounds>1] = 1
-    cmap = LinearSegmentedColormap.from_list('mycmap', [(0, 'white'),
-                                                        (bounds[0], 'lightgrey'),
-                                                        (bounds[1], 'beige'),
-                                                        (bounds[2], 'yellow'),
-                                                        (bounds[3], 'orange'),
-                                                        (bounds[4], 'red'),
-                                                        (bounds[5], 'darkred'),
-                                                        (1, 'black')])
-    if gray:
-        cmap='gray_r'
 
-    if 1: cmap = 'OrRd'
-    plt.imshow(img[yymin: yymax+1, xxmin: xxmax+1], cmap=cmap, vmin=vmin, vmax=vmax, extent=[xmin, xmax, ymax, ymin], interpolation=interpolation)
-    cbar = plt.colorbar(orientation='horizontal', pad=pad, fraction=cbfrac)#, boundaries=[levels[0], levels[-1]])
-    tick_loc = ticker.MaxNLocator(nbins=7)
-    cbar.locator = tick_loc
-    cbar.update_ticks()
+    if sb:
+        vmax *= sbconv
+        vmin *= sbconv
+
+    if contours and std > 0:
+        print 'Contours nsigma and std:', nsigma, std
+        levels = (np.arange(nsigma) + 2) * std
+        #np.concatenate(((np.arange(nsigma) + 2) * std, (np.arange(nsigma * 2) ** 2 + nsigma + 2) * std))
+        cset = plt.contour(img[yymin: yymax+1, xxmin: xxmax+1], levels, aspect='auto', colors='grey',
+                           extent=[xmin, xmax, ymin, ymax], linewidths=contoursw)
+    # print nsigma, std, vmin, vmax
+    if gray: cmap = 'Greys'#'gray_r'
+    else: cmap = 'OrRd'
+
+    if logscale:
+        from matplotlib.colors import LogNorm
+        from matplotlib.ticker import LogLocator
+        # img = np.log10(img)
+        #print np.nansum(img<1.e-5)
+        #vmin = .1
+        #vmax = 1
+        #norm = LogNorm(vmin=vmin, vmax=vmax)#vmin=np.amin(img), vmax=np.amax(img))#
+        pcm = ax.imshow(np.log10(img[yymin: yymax+1, xxmin: xxmax+1]), cmap=cmap,
+                        vmin=np.log10(vmin), vmax=np.log10(vmax))#,
+               #norm=norm)#, interpolation=interpolation, extent=[xmin, xmax, ymax, ymin],
+        #fmt = LogFormatter(10, labelOnlyBase=False)
+        cbar = plt.colorbar(pcm, orientation='horizontal', pad=pad, fraction=cbfrac)#,
+                            #format=fmt)
+        #ticks=np.linspace(0, 1, len(cbticks))
+        #, ticks=np.power(10, cbticks)
+        #cbar.set_ticks([1,2,3,4, 5, 6])#cbticks)#np.log10(np.linspace(0, 1, len(cbticks))))
+        #cbar.ax.xaxis.set_major_locator(LogLocator())
+        #cbar.ax.set_xticks(np.linspace(np.log10(vmin), np.log10(vmax), 5))#len(cbticks)))#np.power(10, cbticks))
+        cbar.set_ticks(np.log10(cbticks))#np.linspace(np.log10(vmin), np.log10(vmax), 4))
+        cbar.ax.set_xticklabels(cbticks)#['0.002', '.02', '0.2', '2'])#
+    else:
+        plt.imshow(img[yymin: yymax+1, xxmin: xxmax+1], cmap=cmap, vmin=vmin, vmax=vmax, interpolation=interpolation,
+               extent=[xmin, xmax, ymax, ymin])
+        cbar = plt.colorbar(orientation='horizontal', pad=pad, fraction=cbfrac)  # , boundaries=[levels[0], levels[-1]])
+    #cmap.set_bad('black', 1.)
+    #plt.imshow(masked_array, interpolation=interpolation, cmap=cmap)
+
+    #tick_loc = ticker.MaxNLocator(nbins=nbins)
+    #cbar.locator = tick_loc
+    #cbar.update_ticks()
     cbar.ax.tick_params(labelsize=fsize)
-    if cb_label and scb_label == '':
+    if cb_label and sb:
         if sbfix:
             aa = 18
         else:
             aa = 20
         scb_label = r'$\rm{SB}\,\rm{[}10^{-%s}\rm{erg\,s^{-1}cm^{-2}arcsec^{-2}]}$' % aa
-    cbar.set_label(scb_label, fontsize=(fsize - 1), labelpad=clabelpad)
+    cbar.set_label(scb_label, fontsize=fsize, labelpad=clabelpad)
+
+    if angle is not None:
+        l = xmax*.2
+        l2 = l*1.22
+        l3 = .4
+        off = xmax*0.3
+        #angle=0
+        xmoff = xmax-off
+        ymoff = ymin+off
+        ca = cos(angle)
+        sa = sin(angle)
+        ca2 = cos(angle+np.pi*1.5)
+        sa2 = sin(angle+np.pi*1.5)
+        ca3 = cos(np.pi*.75)
+        sa3 = sin(np.pi*.75)
+        ca4 = cos(np.pi+np.pi*1.75)
+        sa4 = sin(np.pi+np.pi*1.75)
+        plt.plot((xmoff, xmoff+l*ca), (ymoff, ymoff+l*sa), '-', color='black', lw=2)
+        plt.text(xmoff+l2*ca+l3*ca3, ymoff+l2*sa+l3*sa3, 'E')
+        plt.plot((xmoff, xmoff+l*ca2), (ymoff, ymoff+l*sa2), '-', color='black', lw=2)
+        plt.text(xmoff+l2*ca2+l3*ca4, ymoff+l2*sa2+l3*sa4, 'N')
+
+        #xx0 = [xmoff+l2*ca2, xmoff+l2*ca, xmoff+l2*ca2+l3*ca4, xmoff+l2*ca+l3*ca3]
+        #yy0 = [ymoff+l2*sa2, ymoff+l2*sa, ymoff+l2*sa2+l3*sa4, ymoff+l2*sa+l3*sa3]
+        #plt.scatter(xx0[:2], yy0[:2], marker='x', color='red')
+        #plt.scatter(xx0[2:], yy0[2:], marker='x', color='blue')
+
+
+    if region is not None:
+        xi, xf, yi, yf = region
+        w = 2#*xmax/40.
+        plt.plot((xi, xf), (yi, yi), '-', label='', color=regcolor, linewidth=w, alpha=0.8)
+        plt.plot((xi, xf), (yf, yf), '-', label='', color=regcolor, linewidth=w, alpha=0.8)
+        plt.plot((xi, xi), (yi, yf), '-', label='', color=regcolor, linewidth=w, alpha=0.8)
+        plt.plot((xf, xf), (yi, yf), '-', label='', color=regcolor, linewidth=w, alpha=0.8)
+
+        #plt.axvspan(xi, xf, ymin=yi, ymax=yf, facecolor='purple', alpha=0.2)
+
+    if scale:
+        w = 2
+        tl = 7
+        xoff = 7-xmax/5.
+        yoff = xoff/5.
+        print 'xoff', xoff
+        plt.plot((xmax*.6-xoff, xmax*.6+9-xoff), (ymax*.8-yoff, ymax*.8-yoff), '-', label='', color="black", linewidth=w)
+        plt.text(xmax*.6-xoff*.5+1, ymax*.9, r'$\rm{30\,kpc}$', fontsize=18)
+
+    if text is not None and textpos is not None:
+        for t, tp in zip(text, textpos):
+            plt.text(tp[0], tp[1], t, fontsize=fsize-1, backgroundcolor='white')
+
+    if arrow:
+        asize = xmax/10.
+        plt.arrow(xmax*.95, 0, -asize, 0, width=.3*asize, head_width=.8*asize, head_length=asize, color='purple')
+
     if saveim:
         if highq:
-            if imout == None: imout = im.replace('.fits', '.eps')
-            print 'Saving image', imout
-            plt.savefig(imout, format='eps', dpi=1000)
+            if imout == None: imout = im.replace('.fits', '.pdf')
+            print 'Saving pdf image', imout, 'dpi', dpi
+            plt.savefig(imout, format='pdf', dpi=dpi)
         else:
             if imout == None: imout = im.replace('.fits', '.png')
-            print 'Saving image', imout
+            print 'Saving png image', imout
             plt.savefig(imout)
     if show:
         plt.show()
@@ -449,18 +581,18 @@ def astroim(im, smooth=True, xmin=None, xmax=None, ymin=None, ymax=None,
     plt.close()
 
 
-def pdfim(lst, smooth=True, xmin=0, xmax=41, ymin=0, ymax=41,
+def pdfim(lst, fcats=None, smooth=True, xmin=None, xmax=None, ymin=None, ymax=None,
           vmin=None, vmax=None, xtmin=0, contours=False, std=None,
           fsize=18, cbfrac=.05, pad=.7, dfig=None, cb_label=True,
-          scb_label='', clabelpad=None, ylabelpad=None,
+          scb_label='', clabelpad=None, ylabelpad=None, zw0=3,
           sbfix=False, units='theta', imout='test.pdf', title='', nsigma=5, parallel=True):
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
 
-    cmap='OrRd'
+    cmap = 'OrRd'
     n = len(lst)
-    ncol = 4
-    nrow = 6
+    ncol = 3
+    nrow = 4
     jj = range(ncol)
     kk = range(nrow)
     i = 0
@@ -478,8 +610,9 @@ def pdfim(lst, smooth=True, xmin=0, xmax=41, ymin=0, ymax=41,
                     a.set_yticks([])
                     if i < n:
                         im = lst[i]
-                        hdu_list = fits.open(im)
-                        image_data = (hdu_list[0].data)[::-1, :]
+                        fits = getdata(im)
+                        zl, yl, xl = fits.shape
+                        image_data = np.nanmean(fits[zl/2-zw0:zl/2+zw0+1, :, :], 0)
                         mask = np.isnan(image_data)
                         image_data[mask] = 0
                         if smooth:
@@ -489,42 +622,49 @@ def pdfim(lst, smooth=True, xmin=0, xmax=41, ymin=0, ymax=41,
 
                         if xmin is None:
                             xmin = 0
+                        if xmax is None:
                             xmax = img.shape[1]
+                        if ymin is None:
                             ymin = 0
+                        if ymax is None:
                             ymax = img.shape[0]
                         a.set_xlim(xmin, xmax)
                         a.set_ylim(ymax, ymin)
                         a.xaxis.tick_top()
-                        axtitle = im.split('_pair')[1].split('.')[0]
-                        a.set_title(axtitle, fontsize=8)#, y=1.14)
-                        if not std:
+                        axtitle = im.split('_')[1].split('.')[0]
+                        if fcats is not None:
+                            axtitle = fcats[i] + " " + axtitle
+                        a.set_title(axtitle, fontsize=8)  # , y=1.14)
+                        if 1:#std is None:
                             rad = 8
-                            y, x = np.ogrid[-ymax/2+1: ymax/2+1, -xmax/2+1: xmax/2+1]
-                            mask = x**2 + y**2 > rad**2
+                            y, x = np.ogrid[-ymax / 2 + 1: ymax / 2 + 1, -xmax / 2 + 1: xmax / 2 + 1]
+                            mask = x ** 2 + y ** 2 > rad ** 2
                             std = np.nanstd(img[mask])
                             print 'std with sigma clipping', std
-                        if not vmin: vmin = -5 * std
-                        if not vmax: vmax = 5 * std
+                        if vmin is None: vmin = -2*std
+                        if vmax is None: vmax = 5*std
                         a.imshow(img, cmap=cmap, vmin=vmin, vmax=vmax, extent=[xmin, xmax, ymax, ymin])
                         if contours:
                             levels = [(n + 1) * std for n in range(nsigma)]
-                            a.contour(img, levels, aspect='auto', colors=['black'] * nsigma, extent=[xmin, xmax, ymin, ymax])
+                            a.contour(img, levels, aspect='auto', colors=['black'] * nsigma,
+                                      extent=[xmin, xmax, ymin, ymax])
                         i += 1
             print "Writing PDF page", nfig
             pdf.savefig()
             plt.close()
 
 
-def rdarg(argv, key, type=None, default=None):
-    #print argv, key, type, default
+def rdarg(argv, key, type=None, default=None, listtype=int):
+    # print argv, key, type, default
 
     if len(argv) > 1:
         opt = np.where([a == '-%s' % key for a in argv])[0] + 1
         if len(opt) > 0:
             name = argv[int(opt)]
             if type is list:
-                name = name.split()
-                name = [float(i) for i in name]
+                name = name.split(',')
+                if listtype==int: name = [int(i) for i in name]
+                elif listtype==float: name = [float(i) for i in name]
             elif type is bool:
                 print key, name
                 name = eval(str(name))
@@ -541,106 +681,239 @@ def rdarg(argv, key, type=None, default=None):
         return default
 
 
-def stack(lst, out, imtype='mean', sclip=5, zw0=1, makeim=True, title='', vmin=None, vmax=None, npix=True, var=True,
-          output=True, smooth=True, flipshear=False, snr=True, corrmean=False, flipy=False, xmin=None, xmax=None,
-          ymin=None, ymax=None, randflipy=False, overwrite=False, std=None, highq=False):
+
+def stack(lst, out, imtype='mean', sclip=3, zw0=1, makeim=True, title='', vmin=None, vmax=None, npix=True, var=True,
+          output=True, smooth=True, flipshear=False, z1=None, z2=None, snr=True, corrmean=False, flipy=False,
+          xmin=None, xmax=None, ymin=None, ymax=None, randflipy=False, overwrite=False, std=None, highq=False,
+          stds=None, dosclip=True, scliptype=1, vb='', offset=0, arrow=False, contours=True, unique=False):
     from pyfits import getdata, PrimaryHDU
 
-    def cubim(data, name, zw0, label, vmi=None, vma=None, contours=True, smooth=True):
+    def cubim(data, name, zw0, label, vmi=None, vma=None, contours=False, smooth=True, stdd=None, sb=True):
         if not os.path.isfile(name) or overwrite:
             zl, xl, yl = data.shape
-            zw = '%d:%d' % (zl / 2 - zw0 + 1, zl / 2 + zw0 + 1)
+            zw = '%d:%d' % (zl/2-zw0+1+offset, zl/2+zw0+1+offset)
             hdu.data = data
             print 'cubim', name
             hdu.writeto(name, clobber=True)
+            hdu.data = np.nansum(data[zl/2-zw0+offset:zl/2+zw0+1+offset, :, :], 0)
+            hdu.writeto(name.replace('.fits', '.test.IM.fits'), clobber=True)
+
             s = 'Cube2Im -cube %s[*,*,%s] -imtype flux -out %s' % (name, zw, name.replace('.fits', '.IM.fits'))
             print s
             os.system(s)
+
         astroim(name.replace('.fits', '.IM.fits'), smooth=smooth, saveim=makeim, show=False, cbfrac=.08, pad=.006,
-                    dfig=(8, 10), contours=contours, scb_label=label, title=title, vmin=vmi, vmax=vma, std=std, highq=highq)
+                dfig=(8, 10), contours=contours, scb_label=label, title=title, vmin=vmi, vmax=vma, std=stdd,
+                highq=highq, sb=sb, y0=0, x0=0, gray=True, xmin=xmin, xmax=xmax, ymin=ymin, ymax=ymax, arrow=arrow)
 
     _output = []
     if not os.path.isfile(out) or overwrite:
-        fits = []
         hdu = PrimaryHDU()
-        if flipshear:
-            r1=1
-            r2=2
+        if len(lst) > 2000:
+            t0 = time.time()
+            stdss = []
+            nit = 4
+            for i in range(nit):
+                lstn = [np.random.choice(lst) for i in range(100)]
+                fits = [getdata(dir) for dir in lstn]
+                fits = np.array(fits)
+                fits, stds = sclipping(fits, sclip, 0)
+                stdss.append(stds)
+                del fits
+            stdss = np.array([stdss[j][0] for j in range(nit)])
+            fvar = np.nanmean(stdss, 0)
+            zl, yl, xl = fvar.shape
+            f = np.zeros((zl, yl, xl))
+            nf = np.zeros((zl, yl, xl))
+            i = 0
+            nstack = 0
+            fff = []
             for l in lst:
-                ff = getdata(l)
-                if r1 > r2:
-                    ff = ff[::-1, :, :]
-                fits.append(ff)
-                if flipy:
-                    fits.append(ff[:, ::-1, :])
-                if randflipy:
-                    if np.random.randint(2):
-                        fits.append(ff[:, ::-1, :])
-                del ff
+                try:
+                    ff = getdata(l)
+                    if corrmean:
+                        rad = 10
+                        y, x = np.ogrid[-yl / 2 + 1: yl / 2 + 1, -xl / 2 + 1: xl / 2 + 1]
+                        mask = x ** 2 + y ** 2 > rad ** 2
+                        for k in range(zl):
+                            outf = ff[k, mask]
+                            outstd = np.nanstd(outf)
+                            outmean = np.nanmean(outf[np.abs(outf) < sclip * outstd])
+                            ff[k, :] = ff[k, :] - outmean
+                    if dosclip: ff, stds = sclipping(ff, sclip)
+                    fff.append(ff)
+                    del ff
+                    print '1',
+                    i += 1
+                    if i > 200:
+                        nstack += i
+                        nnn = np.nansum(np.isfinite(fff), 0)
+                        ff = np.nansum(fff, 0)
+                        f = np.nansum([ff, f], 0)
+                        nf = np.nansum([nnn, nf], 0)
+                        i = 0
+                        del fff
+                        fff = []
+                except:
+                    print '0',
+            nnn = np.nansum(np.isfinite(fff), 0)
+            ff = np.nansum(fff, 0)
+            f = np.nansum([ff, f], 0)
+            nf = np.nansum([nnn, nf], 0)
+            print ''
+            f /= nf
+            nstack += i
+            print 'Subcubes reaaaly stacked %d, i=%d' %(nstack, i)
+            print 'Time spent %.3f s' % (time.time()-t0)
+
         else:
-            for l in lst:
-                ff = getdata(l)
-                fits.append(ff)
-                if flipy:
-                    fits.append(ff[:, ::-1, :])
-                if randflipy:
-                    if np.random.randint(2):
-                        fits.append(ff[:, ::-1, :])
-                del ff
-        fits = np.array(fits).astype(float)
-        bad = fits < -100
-        if len(bad) > 0:
-            fits[bad] = np.nan
-        nl, zl, yl, xl = fits.shape
-        #Estimate std in the region outise the central source
-        rad = 8
-        y, x = np.ogrid[-yl/2+1: yl/2+1, -xl/2+1: xl/2+1]
-        mask = x**2 + y**2 > rad**2
-        if corrmean:
-            for i in range(nl):
-                outmean = np.nanmean(fits[i, :, mask])
-                fits[i] = fits[i] - outmean
-                print "mean correction", outmean
-        if std: sigma = std
-        else: sigma = np.nanstd(fits[:, :, mask])
-        print 'Stack sigma!!!!!!!!!!!!!!!!!!!!!!!!!!!', sigma
-        high_sigma = np.abs(fits) > sclip * sigma
-        fits[high_sigma & mask] = np.nan
-        if imtype == 'mean':
-            f = np.nanmean(fits, axis=0)
-        if imtype == 'flux':
-            f = np.nansum(fits, axis=0)
-        if imtype == 'median':
-            from scipy import stats
-            f = stats.nanmedian(fits, axis=0)
+            fits = []
+            if unique: nuns = []
+            if flipshear and z1 is not None and len(lst) == len(z1):
+                print "\nDoing flipshear!!!!!!!!!\n"
+                for l, zd in zip(lst, z1-z2):
+                    ff = getdata(l)
+                    if zd > 0: fits.append(ff[::-1, :, :])
+                    else: fits.append(ff)
+                    del ff
+            else:
+                for l in lst:
+                    try:
+                        ff = getdata(l)
+                        if unique: nn = getdata(l.replace('.fits', '.nun.fits'))
+                        if flipy:
+                            fits.append(ff[:, ::-1, :])
+                        if randflipy:
+                            if np.random.randint(2):
+                                fits.append(ff[:, ::-1, :])
+                            else:
+                                fits.append(ff)
+                        else:
+                            fits.append(ff)
+                            if unique: nuns.append(nn)
+                        del ff
+                        ff.close()
+                        if unique:
+                            del nn
+                        print '1',
+                    except:
+                        print '0',
+                print ''
+            fits = np.array(fits).astype(float)
+            nl, zl, yl, xl = fits.shape
+            print '\n\n########## Number of subcubes reaaaally stacked', nl, '############\n\n'
+            if unique:
+                print "~~~~~~~~~~~~~~~~~~~removing repeated pixels~~~~~~~~~~~~~~~~~~~~~~"
+                nuns = np.array(nuns).astype(int)
+                fnun = np.zeros((zl, yl, xl))
+                for i in range(xl):
+                    for j in range(yl):
+                        for k in range(zl):
+                            us = np.unique(nuns[:, k, j, i], return_index=True)
+                            fnun[k, j, i] = len(us[0])
+                            fits[:, k, j, i][~us[1]] = np.nan
+                hdu.data = fnun
+                hdu.writeto(out.replace('.fits', '.nun.fits'), clobber=True)
+            # Estimate std in the region outise the central source
+            if corrmean:
+                rad = 10
+                y, x = np.ogrid[-yl / 2 + 1: yl / 2 + 1, -xl / 2 + 1: xl / 2 + 1]
+                mask = x ** 2 + y ** 2 > rad ** 2
+                for i in range(nl):
+                    for k in range(zl):
+                        outf = fits[i, k, mask]
+                        outstd = np.nanstd(outf)
+                        outmean = np.nanmean(outf[np.abs(outf) < sclip * outstd])
+                        fits[i, k, :] = fits[i, k, :] - outmean
+            t0 = time.time()
+            if dosclip:
+                if stds is None:
+                    print "Calculating std for the %d subcubes" % len(fits)
+                    if scliptype == 0:
+                        fits, stds = sclipping(fits, sclip)
+                    if scliptype == 1:
+                        #stds = np.nanstd(fits, 0)
+                        #high_sigma = np.abs(fits) > sclip * stds
+                        #fits[high_sigma] = np.nan
+                        fits, stds = sclipping(fits, sclip, 0)
+                        hdu = PrimaryHDU()
+                        hdu.data = stds
+                        hdu.writeto(out.replace('.fits', '.prevar.fits'), clobber=True)
+                        stds = np.mean(stds)
+                    if scliptype == 2:
+                        if not corrmean:
+                            rad = 10
+                            y, x = np.ogrid[-yl / 2 + 1: yl / 2 + 1, -xl / 2 + 1: xl / 2 + 1]
+                            mask = x ** 2 + y ** 2 > rad ** 2
+                        sss = []
+                        for i in range(zl):
+                            fz = fits[:, i, :, :]
+                            #fits, stds = sclipping(fz, None, mask)
+                            np.nanstd(fz[:, mask])
+                            high_sigma = np.abs(fz) > sclip * stds
+                            fz[high_sigma] = np.nan  # fits[high_sigma & mask] = np.nan
+                            sss.append(stds)
+
+                            fits[:, i, :, :] = fz
+                            #print "std layer %d : %.3f. Voxels rejected %d of %d" % (i, stds, np.sum(high_sigma), nn)
+                        stds = np.mean(sss[zl/2-1:zl/2+2])
+                    print "end calculating std = %.3f. Time spent %.3f s" % (stds, time.time() - t0)
+
+            if imtype == 'mean':
+                f = np.nanmean(fits, 0)
+            if imtype == 'trimean':
+                q1 = np.percentile(fits, 25, 0)
+                q2 = np.percentile(fits, 50, 0)
+                q3 = np.percentile(fits, 75, 0)
+                f = (q1+q2*2+q3)/4.
+            if imtype == 'flux':
+                f = np.nansum(fits, 0)
+            if imtype == 'median':
+                try:
+                    from scipy import stats
+                    f = stats.nanmedian(fits, 0)
+                except AttributeError:
+                    f = np.nanmedian(fits, 0)
+
+            nf = np.nansum(np.isfinite(fits), axis=0)
+            if var: fvar = np.nanvar(fits, axis=0) / nf ** 2
+
         _output.append(f)
-        if makeim: cubim(f, out, zw0, 'Flux [1e-20 cgs]', vmin, vmax)
+        if makeim: cubim(f, out, zw0, 'Flux [1e-20 cgs]', vmin, vmax, contours=contours, stdd=std)
 
         if npix:
-            nf = np.nansum(np.isfinite(fits), axis=0)
-            if makeim: cubim(nf, out.replace('.fits', '.NPIX.fits'), zw0, label='Number of voxels', vmi=0, contours=False, smooth=False)#, vmi=0, std=1000)#, vmi=np.amin(nf), vma=np.amax(nf))
+            if makeim: cubim(nf, out.replace('.fits', '.NPIX.fits'), zw0, label='Number of voxels', vmi=0,
+                             contours=False, smooth=False, sb=False)  # , vmi=0, std=1000)#, vmi=np.amin(nf), vma=np.amax(nf))
             _output.append(nf)
+
         if var:
-            fvar = np.nanvar(fits, axis=0)
-            if makeim: cubim(fvar, out.replace('.fits', '.VAR.fits'), zw0, label='Variance')#, vmi=0, vma=30)# vmi=np.amin(var), vma=np.amax(var))
+            if makeim: cubim(fvar, out.replace('.fits', '.VAR.fits'), zw0,
+                             label='Variance', sb=False)  # , vmi=0, vma=30)# vmi=np.amin(var), vma=np.amax(var))
             _output.append(fvar)
-        #hdu._close()
-        del fits
+
 
     else:
         print out, 'already exists.'
         f = getdata(out)
         _output.append(f)
-        if makeim: cubim(f, out, zw0, 'Flux [1e-20 cgs]', vmin, vmax)
+        if makeim: cubim(f, out, zw0, 'Flux [1e-20 cgs]', vmin, vmax, contours=contours, stdd=std)
         if npix:
-            nf = getdata(out.replace('.fits', '.NPIX.fits'))
-            if makeim: cubim(nf, out.replace('.fits', '.NPIX.fits'), zw0, label='Number of voxels', vmi=0, contours=False, smooth=False)#, vmi=np.amin(nf), vma=np.amax(nf))
-            _output.append(nf)
+            if os.path.isfile(out.replace('.fits', '.NPIX.fits')):
+                nf = getdata(out.replace('.fits', '.NPIX.fits'))
+                if makeim: cubim(nf, out.replace('.fits', '.NPIX.fits'), zw0, label='Number of voxels', vmi=0,
+                                 contours=False, smooth=False)  # , vmi=np.amin(nf), vma=np.amax(nf))
+                _output.append(nf)
+            else:
+                print "Warning, npix file does not exists"
+                _output.append(f)
         if var:
-            fvar = getdata(out.replace('.fits', '.VAR.fits'))
-            if makeim: cubim(fvar, out.replace('.fits', '.VAR.fits'), zw0, label='Variance')
-            _output.append(fvar)
-
+            if os.path.isfile(out.replace('.fits', '.VAR.fits')):
+                fvar = getdata(out.replace('.fits', '.VAR.fits'))
+                if makeim: cubim(fvar, out.replace('.fits', '.VAR.fits'), zw0, label='Variance')
+                _output.append(fvar)
+            else:
+                print "Warning, var file does not exists"
+                _output.append(f)
     if output:
         if len(_output) == 1:
             return _output[0]
@@ -649,6 +922,7 @@ def stack(lst, out, imtype='mean', sclip=5, zw0=1, makeim=True, title='', vmin=N
 
 
 def analysis(f, nf, stdbin, stdbins, binsize, xl, yl, zl, yw0, zw0, frs=None):
+    #print "Stack analysis"
     stack_stds = []
     stack_flux = []
     stack_npix = []
@@ -657,6 +931,10 @@ def analysis(f, nf, stdbin, stdbins, binsize, xl, yl, zl, yw0, zw0, frs=None):
     _stack_flux = []
     _stack_npix = []
     _randf = []
+
+    conv0 = 1.25 / pow(binsize * .2, 2)
+    f *= conv0
+    if frs is not None: frs *= conv0
 
     for i in stdbins:
         stack_flux.append(np.nanmean(f[zl / 2 - zw0: zl / 2 + zw0 + 1, yl / 2 - yw0: yl / 2 + yw0 + 1, i:i + stdbin]))
@@ -675,8 +953,8 @@ def analysis(f, nf, stdbin, stdbins, binsize, xl, yl, zl, yw0, zw0, frs=None):
             randf.append(np.nanmean(frs[zl / 2 - zw0: zl / 2 + zw0 + 1, i:i + stdbin, xl / 2 - yw0: xl / 2 + yw0 + 1]))
             _randf.append(np.nanmean(frs[zl / 2 - zw0: zl / 2 + zw0 + 1, i:i + stdbin, xl / 2 - yw0: xl / 2 + yw0 + 1]))
 
-    conv1 = (zw0*2+1)*1.25*(yw0*2+1)*stdbin
-    conv2 = (zw0*2+1)*1.25/(binsize*.2)
+    #conv1 = (zw0 * 2 + 1) * 1.25 * (yw0 * 2 + 1) * stdbin
+    conv2 = (binsize * .2)
     stack_flux = np.array(stack_flux)
     stack_stds = np.array(stack_stds)
     _stack_flux = np.array(_stack_flux)
@@ -685,11 +963,47 @@ def analysis(f, nf, stdbin, stdbins, binsize, xl, yl, zl, yw0, zw0, frs=None):
         randf = np.array(randf)
         _randf = np.array(_randf)
         h = "theta SB npix 1sigma_SB SB_rand"
-        all = [(stdbins - stdbins[-1]/2.) * (binsize*.2), stack_flux*conv1, stack_npix, stack_stds*conv2, randf*conv1]
-        _all = [(stdbins - stdbins[-1]/2.) * (binsize*.2), _stack_flux*conv1, _stack_npix, _stack_stds*conv2, _randf*conv1]
+        all = [(stdbins - stdbins[-1] / 2.) * conv2, stack_flux, stack_npix, conv2 * stack_stds,
+               randf]
+        _all = [(stdbins - stdbins[-1] / 2.) * conv2, _stack_flux, _stack_npix, conv2 * _stack_stds,
+                _randf]
     else:
         h = "theta SB npix 1sigma_SB"
-        all = [(stdbins - stdbins[-1]/2.) * (binsize*.2), stack_flux*conv1, stack_npix, stack_stds*conv2]
-        _all = [(stdbins - stdbins[-1]/2.) * (binsize*.2), _stack_flux*conv1, _stack_npix, _stack_stds*conv2]
+        all = [(stdbins - stdbins[-1] / 2.) * conv2, stack_flux, stack_npix, stack_stds]
+        _all = [(stdbins - stdbins[-1] / 2.) * conv2, _stack_flux, _stack_npix, conv2 * _stack_stds]
 
     return all, _all, h
+
+
+def sclipping(fits, nsigma, dim=None, mask=None):
+    #print 'Asign nan to values > nsigma in a fits array'
+    if dim is None:
+        stds = np.nanstd(fits[:, mask])
+    else:
+        stds = np.nanstd(fits[:, mask], dim)
+    high_sigma = np.abs(fits) > nsigma * stds
+    fits[high_sigma] = np.nan
+    return fits, stds
+
+
+def fof():
+    import pyfof
+
+    mm=np.array(mat).T
+    x=mm[6]
+    y=mm[7]
+    z=mm[8]
+    c=np.array([x,y,z]).T
+    cls=pyfof.friends_of_friends(c, 200)
+    cls=pyfof.friends_of_friends(c, 20)
+    cls
+    cls=pyfof.friends_of_friends(c, 10)
+    cls
+    cls=pyfof.friends_of_friends(c, 5)
+    cls
+    len(cls)
+    len(x)
+    cls=pyfof.friends_of_friends(c, 2)
+    len(cls)
+    cls=pyfof.friends_of_friends(c, 20)
+    len(cls)
