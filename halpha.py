@@ -1,12 +1,9 @@
 #!/usr/bin/env python
-import numpy as np
 from copy import copy
 from pyfits import getdata, PrimaryHDU
-from math import pi, atan2, sqrt
-import os, subprocess
-from tools_sofi import distance, rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
-from sys import argv
 from scipy import integrate
+
+import numpy as np
 
 
 def mean_sclip(flux, stds=None, nsigma=4, iterations=6):
@@ -117,7 +114,6 @@ nrad = len(radii_kpc)
 
 wavmin, wavmax = [4750.+zmin*1.25, 4750.+(zmin+zl-1)*1.25]
 
-
 foutline = '../../%s/lines.dat' % fitcat
 
 if 0:
@@ -139,7 +135,7 @@ flux_mean = {}
 flux_median = {}
 flux_std = {}
 nz = 2*zw+1
-lines = ['HALPHA']#, 'HBETA', 'HGAMMA', 'HDELTA', 'LYALPHA']
+lines = ['HALPHA', 'HBETA', 'HGAMMA', 'HDELTA']
 for line in lines:#[lines[2]]:
     print 'Computing radial profile for %s,' % line,
     wav = wavelength[line]
@@ -150,7 +146,7 @@ for line in lines:#[lines[2]]:
     y = ys[goodgals]
     z = np.round(l2pix(wav)).astype(int)-zmin-1
     N = len(x)
-    print np.sum((x>0) & (x<xl) & (y>0) & (y<yl)), 'inside UDF-mosaic'
+    print np.sum((x > 0) & (x < xl) & (y > 0) & (y < yl)), 'inside UDF-mosaic'
 
     fmean = np.zeros((nz, nrad-1))
     fmedian = np.zeros((nz, nrad-1))

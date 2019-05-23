@@ -1,12 +1,13 @@
 __author__ = 'gallegos'
 
-from pyfits import getdata, PrimaryHDU
-import numpy as np
 import os
-from os.path import isfile, isdir
-from tools_sofi import astroim, rdarg, stack, pdfim, analysis
+from os.path import isdir
+from pyfits import getdata, PrimaryHDU
 from sys import argv
-from random import randint
+
+import numpy as np
+
+from tools_sofi import rdarg, pdfim
 
 
 def sclipping(fits, nsigma, dim=None, mask=None, iter=3):
@@ -26,7 +27,7 @@ contours = rdarg(argv, 'contours', bool, True)
 dosclip = rdarg(argv, 'dosclip', bool, True)
 extraname = rdarg(argv, 'extraname', str, '')
 fitcat = rdarg(argv, key='fitcat', type=str, default='EAGLE')
-folder = rdarg(argv, 'folder', str, '/net/astrogate/export/astrodata/gallegos/')  # '/scratch/gallegos/MUSE/'
+folder = rdarg(argv, 'folder', str, '/net/galaxy-data/export/galaxydata/gallegos/')  # '/scratch/gallegos/MUSE/'
 foldercat = rdarg(argv, 'foldercat', str, '../../')  # '/scratch/gallegos/MUSE/'
 folderout = rdarg(argv, 'folder', str, '../../')  # '/scratch/gallegos/MUSE/'
 fshear = rdarg(argv, 'flipshear', bool, False)
@@ -84,8 +85,8 @@ pmin = rdarg(argv, 'pmin', float, 16)
 pmax = rdarg(argv, 'pmax', float, 2000)
 rmin = rdarg(argv, 'rmin', float, 2.9)
 rmax = rdarg(argv, 'rmax', float, 4.0)
-lmin = rdarg(argv, 'lmin', float, 0)
-lmax = rdarg(argv, 'lmax', float, 2000)
+lmin = rdarg(argv, 'umin', float, 0)
+lmax = rdarg(argv, 'umax', float, 99)
 losmin = rdarg(argv, 'losmin', float, 0.5)
 losmax = rdarg(argv, 'losmax', float, 20)
 nmin = rdarg(argv, 'nmin', int, 0)
@@ -162,9 +163,9 @@ if len(close) > 1:
 	nstack = len(lst)
 	print '\n Number of existing subcubes to be stacked', nstack
 
-	foldername = '%s/%s/stacks/snap%d_%s_d%d-%d_pd%d-%d_d5th%.1f-%.1f%s%s%s' % (
+	foldername = '%s/%s/stacks/snap%d_%s_d%d-%d_pd%d-%d_d5th%.1f-%.1f_u%.1f-%.1f%s%s%s' % (
 		folderout, fitcat, snap, coord, dmin, dmax,
-		pmin, pmax, d5min, d5max, prename, extraname, smask)
+		pmin, pmax, d5min, d5max, lmin, lmax, prename, extraname, smask)
 
 	print "Output files in", foldername
 	if not isdir(foldername): os.system('mkdir %s' % foldername)
@@ -184,23 +185,13 @@ if len(close) > 1:
 	nstack = len(lst)
 
 	if not os.path.isfile(stackname) or overwrite:
-		#pdfim(lst, zw0=2, imout='%s/gals_ims.pdf' % foldername)
 		fits = np.array([getdata(l) for l in lst])
-		#fits[fits == 0] = np.nan
-		#if parallel: sext = '.%d'%rank
-		#else: sext = ''
+
 		if imtype == 'mean':
-			#fits, stds = sclipping(fits, nsigma=3, dim=0, iter=3)
 			f = np.nanmean(fits, 0)
-			#hdu.data = f
-			#hdu.writeto(stackname.replace('.fits', '%s.fits' % sext), clobber=True)
 			std = np.nanstd(fits, 0)
-			#hdu.data = std
-			#hdu.writeto(stackname.replace('.fits', '.STD%s.fits' % sext), clobber=True)
 		if imtype == 'median': f = np.nanmedian(fits, 0)
 		zl, yl, xl = f.shape
-		#hdu.data = np.nanmean(f[zl / 2-zw0:zl/2+zw0+1, :, :], 0)
-		#hdu.writeto(stackname.replace('.fits', '.IM%s.fits' % sext), clobber=True)
 
 	else:
 		f = getdata(stackname)

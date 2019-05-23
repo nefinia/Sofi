@@ -6,8 +6,6 @@ import h5py
 import matplotlib.pyplot as plt
 import os
 import scipy.interpolate as inter
-from math import sqrt
-from matplotlib.cm import get_cmap
 from matplotlib.colors import LinearSegmentedColormap
 from pyfits import getdata, PrimaryHDU
 from sys import argv
@@ -17,15 +15,10 @@ import numpy as np
 from tools_sofi import rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
 
 coordnames = rdarg(argv, 'coord', list, ['x', 'y', 'z'], str)
-fitcat = rdarg(argv, 'fitcat', list, ['HDFS', 'UDF', 'mosaic'], str)
 snaps = rdarg(argv, 'snap', list, [10, 11, 12, 13, 14], int)
 scodes = rdarg(argv, 'scodes', str, '/net/abnoba/scratch2/gallegos/Research/MUSE/codes/Sofi/')
 overwrite = rdarg(argv, 'overwrite', bool, False)
-cubecorr = rdarg(argv, 'cubecorr', bool, False)
 halfplot = rdarg(argv, 'halfplot', bool, False)
-extraname = rdarg(argv, 'extraname', str, '')#'HM12')#
-galcov = rdarg(argv, 'galcov', bool, False)
-laemask = rdarg(argv, 'laemask', bool, False)
 histover = rdarg(argv, 'histover', bool, False)
 LLScubes = rdarg(argv, 'LLScubes', bool, False)
 sql = rdarg(argv, 'sql', bool, False)
@@ -34,22 +27,14 @@ pairLLS = rdarg(argv, 'pairLLS', bool, False)
 circlehist = rdarg(argv, 'circlehist', bool, False)
 h2d = rdarg(argv, 'h2d', bool, False)
 kde = rdarg(argv, 'kde', bool, False)
-nhiprof = rdarg(argv, 'nhi', bool, False)
-minres = rdarg(argv, 'minres', int, 512)
-maxres = rdarg(argv, 'maxres', int, 4096)
-npref = rdarg(argv, 'npref', int, 8)
 sbhist = rdarg(argv, 'sbhist', bool, False)
-ssthr = rdarg(argv, 'ssthr', float, 1e10)#6.73E-3
 sbprof = rdarg(argv, 'sbprof', bool, False)
 snr = rdarg(argv, 'snr', bool, False)
 superstack = rdarg(argv, 'superstack', bool, False)
-types = rdarg(argv, 'type', list, ['NHI'], str) #NHtot, f_NHI, NHII
 radprof = rdarg(argv, 'radprof', bool, False)
-rad = rdarg(argv, 'rad', int, 8)
 lutzmodel = rdarg(argv, 'lutzmodel', bool, False)
 unique = rdarg(argv, 'unique', bool, False)
 mask = rdarg(argv, 'mask', bool, False)
-model = rdarg(argv, 'model', str, 'HM01')#'HM12')#
 do_delaunay = rdarg(argv, 'delaunay', bool, False)
 temperature = rdarg(argv, 'temperature', bool, False)
 
@@ -72,43 +57,22 @@ snames = {'10': '010_z003p984', '11': '011_z003p528', '12': '012_z003p017', '13'
 reds = {'10': 984, '11': 528, '12': 17}
 redshifts = {'10': 3.984, '11': 3.528, '12': 3.017, '13': 2.478, '14': 2.237, '15': 2.012}
 asec2kpcs = {'10': 7.842, '11': 7.449, '12': 7.108, '13': 8.241, '14': 8.396, '15': 8.516}
-
-gamma_bkg = {}
-heat_bkg = {}
-sgamma = {}
-sheat = {}
-gamma_bkg['HM12'] = {'10': [5.71E-13, 3.28E-13, 2.31E-16], '11': [6.77E-13, 3.89E-13, 8.70E-16],
+gamma_bkg = {'10': [5.71E-13, 3.28E-13, 2.31E-16], '11': [6.77E-13, 3.89E-13, 8.70E-16],
 			 '12': [7.66E-13, 4.42E-13, 2.10E-15], '13': [9.50E-13, 5.55E-13, 9.06E-15],
 			 '14': [9.64E-13, 5.67E-13, 1.13E-14]}
-
-heat_bkg['HM12'] = {'10': [2.27E-12, 2.18E-12, 7.24E-15],
+heat_bkg = {'10': [2.27E-12, 2.18E-12, 7.24E-15],
 			'11': [2.68E-12, 2.62E-12, 2.33E-14],
 			'12': [3.02E-12, 3.05E-12, 5.01E-14],
 			'13': [3.75E-12, 4.22E-12, 1.78E-13],
 			'14': [3.81E-12, 4.42E-12, 2.18E-13]}
-
-
-gamma_bkg['HM01'] = {'10': [.9E-12, 3.28E-13, 2.31E-16],
-					 '11': [1E-12, 3.89E-13, 8.70E-16],
-					 '12': [1.5E-12, 4.42E-13, 2.10E-15],
-					 '13': [1.7E-12, 5.55E-13, 9.06E-15],
-					 '14': [1.9E-12, 5.67E-13, 1.13E-14]}
-
-heat_bkg['HM01'] = {'10': [3E-12, 2.18E-12, 7.24E-15],
-					'11': [4E-12, 2.62E-12, 2.33E-14],
-					'12': [5E-12, 3.05E-12, 5.01E-14],
-					'13': [5.5E-12, 4.22E-12, 1.78E-13],
-					'14': [6E-12, 4.42E-12, 2.18E-13]}
-
-
-dz = {'10': 0.0255, '11': .03, '12': .035}
+dz = {'10': 0.0255, '11': .035, '12': .03}
+types = ['NHI', 'NHII']
 
 # sbpeaks = [2.396]
-# sbpeaks = {'10': 1.011, '11': 1.484, '12':2.396} # for an aperture of 1 asec^2!!! I am flux2sberting to flux later on
-sbpeaks = {'10': .739, '11': 1.293, '12': 2.579}  # for an aperture of 1 asec^2!!! I am flux2sberting to flux later on
+# sbpeaks = {'10': 1.011, '11': 1.484, '12':2.396} # for an aperture of 1 asec^2!!! I am converting to flux later on
+sbpeaks = {'10': .739, '11': 1.293, '12': 2.579}  # for an aperture of 1 asec^2!!! I am converting to flux later on
 zlens = {'10': 34, '11': 29, '12': 25, '13': 20, '14': 18, '15': 16}
-dndz = {'10': 3., '11': 2.3, '12': 2., '13': 1.3, '14': 1., '15': .5} # check last ones, high extrapolation w/r to Prochaska+10
-lcube = maxres # 4096
+lcube = 4096
 coml = 25  # cMpc
 com2pix = 163.84  # lcube/coml
 kpc2pix = lcube / float(coml * 1e3)
@@ -120,7 +84,6 @@ sb = [0.0001, 0.001, 0.003, 0.03, 0.08, 0.2, 0.45, 0.55, 0.6, 0.7, .8, 0.85, 0.9
 
 nhi2sb = inter.interp1d(nhi, sb)
 sb2nhi = inter.interp1d(sb, nhi)
-
 
 if temperature:
 	res, lmax = 512, 0
@@ -135,13 +98,13 @@ if temperature:
 			cube = getdata('%s/snapshot_%s/fits_3d/snap_%s_%s_%s_8_var_uniform-temperature_lmax_%d.fits' %
 						   (f0, snames[str(snap)], snames[str(snap)], res, res, lmax))
 			zl, yl, xl = cube.shape
-			flux2sb = zl / float(coml)
+			conv = zl / float(coml)
 			z, y, x = np.ogrid[1: zl + 1, 1: yl + 1, 1: xl + 1]
 			T = []  # 20, 40 and 80 kpc
 			for i in range(ngal):
 				print 'id', ids[i], '%d/%d' % (i, ngal)
-				cool = ((.05 * flux2sb) < (z - zc[i] * flux2sb) ** 2 + (y - yc[i] * flux2sb) ** 2 + (x - xc[i] * flux2sb) ** 2) & \
-					   ((z - zc[i] * flux2sb) ** 2 + (y - yc[i] * flux2sb) ** 2 + (x - xc[i] * flux2sb) ** 2 < (.08 * flux2sb))
+				cool = ((.05 * conv) < (z - zc[i] * conv) ** 2 + (y - yc[i] * conv) ** 2 + (x - xc[i] * conv) ** 2) & \
+					   ((z - zc[i] * conv) ** 2 + (y - yc[i] * conv) ** 2 + (x - xc[i] * conv) ** 2 < (.08 * conv))
 				_t = np.nanmean(cube[cool])
 				print 'Temperature between 50 and 80 kpc %f, U %f, number of pixels used %d' % (_t, u[i], np.sum(cool))
 				T.append(_t)
@@ -168,12 +131,12 @@ if temperature:
 
 if LLScubes:
 	cubefolder = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/'
-	cubefolder = '../../EAGLE/'
 	saeed = '/net/galaxy-data/export/galaxydata/saeed/EAGLE/RefL0025N0752/'
+	init_evol = False
+	col_dens = True
+	halos_mask = False
+	do_cubes = False
 	do_inter = False
-	b = [0, 	0, 		0, 			1, 			0, 		0, 			0, 		0,      1]
-	chombo, init_evol, col_dens, gal_mask, do_layers, do_nhfrac, do_lls, do_dndx,   do_dndz = b
-	lmax = int(np.log(maxres/minres)/np.log(2)) #3 if res 4096, 2 for 2048, 1 for 1024, 0 for 512
 
 	hdu = PrimaryHDU()
 	y0 = -1.1549019599857431  # np.log10(.07)
@@ -215,7 +178,6 @@ if LLScubes:
 		plt.savefig('interp2.png')
 		plt.close()
 
-	_cub = []
 	for snap in snaps:
 		s = str(snap)
 		print 'snapshot', snap
@@ -225,206 +187,98 @@ if LLScubes:
 		zlen = zlens[s]
 		asec2pix = asec2kpc * (1 + red) * kpc2pix
 		sb2flux = asec2pix ** -2.
+		rad = 6 * asec2pix
 		cat = getdata('../../EAGLE/cats/gals_snap%d.fits' % snap, 1)
-		size = cat['Mmean200']#in pkpc
-		ngals = len(size)
-		#rad = np.max(([1]*ngals, size/asec2kpc), 0)*asec2pix
-		_rad = rad*asec2pix
-		# check lower or upper case E in the scientific notation!!!
-		_sgamma = '%.2E_%.2E_%.2E' % tuple(gamma_bkg[model][s])
-		_sheat = '%.2E_%.2E_%.2E' % tuple(heat_bkg[model][s])
-		sgamma = '%.2E %.2E %.2E' % tuple(gamma_bkg[model][s])
-		sheat = '%.2E %.2E %.2E' % tuple(heat_bkg[model][s])
+		sgamma = '%.2E %.2E %.2E' % tuple(gamma_bkg[s])
+		sheat = '%.2E %.2E %.2E' % tuple(heat_bkg[s])
 		sname = snames[s]
 
-		for type in types:
+		for type in ['NHI']:
+
 			fname = '%s/snapshot_%s/' % (saeed, sname)
-			if chombo:
-				glob.os.chdir(fname + 'chombo')
-				os.system('./chombo.sh %d %d %d' % (minres, maxres, npref))
-				glob.os.chdir(scodes)
 			if init_evol:
 				glob.os.chdir(fname+'init_evol')
-				finit = 'SO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000' % \
-						(sname, minres, maxres, npref, _sgamma, _sheat, ssthr)
-				if not os.path.isfile(finit) or overwrite:
-					srun = './init_evol_sofi.sh %d %d %d 25. %.3f "%s" "%s" %.2E' % \
-						   (minres, maxres, npref, red, sgamma, sheat, ssthr)
-					print srun
-					os.system(srun)
+				srun = './init_evol.sh 512 4096 8 25. %.3f "%s" "%s"' % (red, sgamma, sheat)
+				print srun
+				os.system(srun)
 				glob.os.chdir(scodes)
 			if col_dens:
 				glob.os.chdir(fname + 'column_density')
-				finit = '../init_evol/SO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000' % \
-						(sname, minres, maxres, npref, _sgamma, _sheat, ssthr)
+				finit = '../init_evol/SO.snap_%s_512_4096_8_%s_%s.ts0000' % \
+						(sname, sgamma.replace(' ', '_'), sheat.replace(' ', '_'))
 				if os.path.isfile(finit):
+					lmax = 3
 					nl = zlens[s]  # number of layers
-					nc = 15  # number of cores
-					_s = saeed + '/snapshot_%s/column_density/layers/' % sname
-					_fl = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000_var_%s_proj_%d_lmax_%d_l_' % \
-									 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr, type, 1, lmax)
-					isfiles = True
-					for i in range(nl): isfiles &= os.path.isfile('%s%d_%d.fits' % (_fl, i+1, nl))
-
-					if not isfiles or overwrite:
-						srun = './column_density_layers.sh %s %s %d %d %d' % (finit, type, lmax, nl, nc)
-						print srun
-						os.system(srun)
+					nc = 10  # number of cores
+					srun = './column_density_layers.sh %s %s %d %d %d' % (finit, type, lmax, nl, nc)
+					print srun
+					os.system(srun)
 				else: print '%s not there?' % finit
 				glob.os.chdir(scodes)
 
+			if halos_mask:
+				outname = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/snap%s_%s.%s.fits' % (
+				snap, coord, type)
+				if not os.path.isfile(fname) or overwrite:
+					if os.path.isfile(outname) and not overwrite:
+						cube = getdata(outname)
+					else:
+						cube = np.zeros((zlen, lcube, lcube))
+
+						if mask:
+							mask = np.zeros((zlen, lcube, lcube))
+							c = ['x', 'y', 'z']
+							c.remove(coord)
+							xc, yc = [cat[c[0]] * com2pix, cat[c[1]] * com2pix]
+							zc = cat[coord] * zlen / coml
+
+							for i in range(len(xc)):
+								print i
+								halos = ((x - xc[i]) ** 2 + (y - yc[i]) ** 2 < rad ** 2) & (abs(z - zc[i]) < zw0)
+								_NHI[halos] = 0
+
+						for i in range(zlen):
+							print 'Coord', coord, 'snap', snap, 'layer', i + 1
+							cubename = 'snap%s_%s_%d.%s.fits' % (sname, coord, i, type)
+							data = getdata('%s/%s' % (fname, cubename))
+							cube[i, :, :] = data
+							hdu.data = cube
+							hdu.writeto(outname, clobber=True)
+		if do_cubes:
 			nl = zlens[s]
+			#check lower or upper case numbers!!!
+			sgamma = '%.2E_%.2E_%.2E' % tuple(gamma_bkg[s])
+			sheat = '%.2E_%.2E_%.2E' % tuple(heat_bkg[s])
 			sname = snames[s]
 			_s = saeed + '/snapshot_%s/column_density/layers/' % sname
 
-			for coord, proj in zip(['x'], [1]):#zip(coordnames, [1, 2, 3]):
-				if gal_mask:
-					outname = '%s/snap%s_%s_r%d.mask.fits' % (cubefolder, snap, coord, rad)
-					if not os.path.isfile(outname) or overwrite:
-						mask = np.zeros((lcube, lcube))
-						y, x = np.ogrid[0: lcube, 0: lcube]
-						c = ['x', 'y', 'z']
-						c.remove(coord)
-						xc, yc = [cat[c[0]] * com2pix, cat[c[1]] * com2pix]
-						ids = cat['ID']
-						for i in range(len(xc)):
-							print '%d %d %d %d' % (i, ids[i], xc[i], yc[i])
-							gal = ((x - xc[i]) ** 2 + (y - yc[i]) ** 2 < _rad ** 2)
-							mask[gal] = ids[i]
-						hdu.data = mask
-						hdu.writeto(outname, clobber=True)
-				if do_layers:
+			for coord, proj in zip(coordnames, [1, 2, 3]):
+				if 0:
 					cubes = []
 					for i in range(nl):
-							flayer = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000_var_%s_proj_%d_lmax_%d_l_%d_%d.fits' % \
-									 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr, type, proj, lmax, i+1, nl)
+							flayer = '%sSO.snap_%s_512_4096_8_%s_%s.ts0000_var_NHI_proj_%d_lmax_3_l_%d_%d.fits' % \
+									 (_s, sname, sgamma, sheat, proj, i+1, nl)
 							cubes.append(getdata(flayer))
-
 					print 'done loading layers'
 					cubes = np.array(cubes)
 					hdu.data = cubes
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, type), clobber=True)
-					print 'done %s cube' % type
-
-
-				if do_nhfrac:
-					cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, type))
-					logcube = np.log10(cubes)
-					nhis = np.arange(15, 22, .1)
-					cool = (logcube > nhis[0]) & (logcube < nhis[-1])
-					hist, bins = np.histogram(logcube[cool], nhis)
-					sumh = float(np.sum(hist))
-					cumh = [np.sum(hist[i:])/sumh for i in range(len(hist))]
-					_dndz = np.array(cumh)*nl/dz[s]
-
-					plt.figure(figsize=(7, 7))
-					plt.scatter(bins[:-1], np.log10(hist)-bins[:-1])
-					plt.xlabel(type)
-					plt.ylabel('log(f_%s)' % type)
-					#plt.ylim([-4.2, 0.2])
-					plt.savefig('../../EAGLE/%sfrac_%s_%s_%d_%d_%d_%.2E.jpg' %
-								(type, coord, model, minres, maxres, nl, ssthr))
-					plt.close()
-				if do_lls:
-					cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, 'NHI'))
-					logcube = np.log10(cubes)
-					cool = logcube > 17.9
-					lls = np.zeros(logcube.shape)
-					lls[cool] = 1
+					hdu.writeto('%s/snap%d_%s.NHI.fits' % (cubefolder, snap, coord), clobber=True)
+					print 'done NHI cube'
+					lls = np.copy(cubes)
+					_lls = cubes > 10**17.2 #from prochaska
+					lls[_lls] = 1
+					lls[~_lls] = 0
 					hdu.data = lls
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d.LLS.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, nl), clobber=True)
-					print 'done LLS cube', snap, coord
-
-				if do_dndx:
-					cname = 'snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s' %\
-							   (snap, coord, model, minres, maxres, npref, nl, ssthr, 'NHI')
-					cubename = '%s/%s.fits' % (cubefolder, cname)
-					print cubename
-					cubes = getdata(cubename)
-					zl, yl, xl = cubes.shape
-					zw = 1
-					zn = zl/zw
-					lc = []
-					for i in range(zn): lc.append(np.sum(cubes[i:i+zw, :, :], 0))
-					lc = np.log10(lc)
-					dzdx = (1.+red)**2/sqrt((1-.714)*(1+red)**3+.714)
-					v = 2.99792458e5*dz[s]*zw/float(zlen)/(1+red)
-					_lls = np.arange(12, 23, .5)
-					nhis, dndxs, dndzs = [[], [], []]
-
-					for i in range(len(_lls)-1):
-						cool = np.sum((lc>=_lls[i])&(lc<_lls[i+1]))
-						dNHI = float(10.**_lls[i+1]-10**_lls[i])
-						lpos = (10.**_lls[i+1]+10**_lls[i])/2.
-						dndz = cool/(dz[s]*zn*zw/float(zl))/float(maxres)**2
-						dndx = dndz/dzdx/dNHI
-						print 'NHI', _lls[i], _lls[i+1], 'dn/dz', dndz, 'dn/dx', dndx
-						nhis.append(lpos)
-						dndxs.append(dndx)
-						dndzs.append(dndz)
-
-					lnhis = np.log10(nhis)
-					ldndx = np.log10(dndxs)
-					plt.plot(lnhis, ldndx)
-					plt.xlim(12, 23)
-					plt.ylim(-27, -9)
-					plt.xticks([12, 14, 16, 18, 20, 22])
-					plt.yticks([-25, -23, -21, -19, -17, -15, -13, -11, -9])
-					plt.xlabel(r'log$_{10}N_{\mathrm{NHI}}$[cm$^{-2}$]')
-					plt.ylabel(r'log$_{10}\partial^2n/\partial N_{\mathrm{NHI}}\partial X$')
-					plt.savefig('../../Figures/cddf_%s_v%d.jpg' % (cname, v))
-					plt.close()
-					dndz = [np.sum(dndzs[i:]) for i in range(len(dndzs))]
-					plt.plot(_lls[:-1], dndz)
-					plt.semilogy()
-					plt.xlabel(r'log$_{10}N_{\mathrm{NHI}}$[cm$^{-2}$]')
-					plt.ylabel(r'$\partial n/\partial z$')
-					plt.savefig('../../Figures/dndz_%s_v%d.jpg' % (cname, v))
-					plt.close()
-
-				if do_dndz:
-					cname = 'logNHI_snap%d_%s' % (snap, coord)
-					mname = 'snap%d_%s_r%d.mask' % (snap, coord, rad)
-					cubename = '%s/%s.fits' % (cubefolder, cname)
-					maskname = '%s/%s.fits' % (cubefolder, mname)
-					print cubename
-					cubes = getdata(cubename)
-					lls = cubes > 17.5
-					cubes[lls] = 1
-					cubes[~lls] = 0
-					mask = getdata(maskname)
-					gals = mask > 0
-					cubes[gals] = np.nan
-					_mean = np.nanmean(cubes)
-					_cub.append(cubes)
-					print 'snap %d %s lls mean %f dndz %f' % (snap, coord, _mean, _mean/dz[s])
-
-				if 0:
-					hist, bins = np.histogram(lcube[lcube > 17.9], 30)
-					sumh = float(maxres)**2
-					cumh = [np.sum(hist[i:]) / sumh for i in range(len(hist))]
-					_dndz = np.array(cumh) / dz[s]
-					dndz_fit = inter.interp1d(_dndz, bins[:-1])
-					cool = lcube > dndz_fit(dndz[s])
-					lls = np.zeros(lcube.shape)
-					lls[cool] = 1
-					hdu.data = lls
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d.LLS.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, nl), clobber=True)
-					print 'done LLS cube, rescaling done for NHI', dndz_fit(dndz[s])
-
-
-				#cubes[cubes < nhi[0]] = nhi[0]
-				#cubes[cubes > nhi[-1]] = nhi[-1]
-				#sbcube = nhi2sb(cubes)
-				#sbcube[sbcube == sb[0]] == 0
-				#hdu.data = sbcube
-				#hdu.writeto('%s/snap%d_%s.SB.fits' % (cubefolder, snap, coord), clobber=True)
-				#print 'done SB cube'
+					hdu.writeto('%s/snap%d_%s.LLS.fits' % (cubefolder, snap, coord), clobber=True)
+					print 'done LLS cube'
+				cubes = getdata('%s/snap%d_%s.NHI.fits' % (cubefolder, snap, coord))
+				cubes[cubes < nhi[0]] = nhi[0]
+				cubes[cubes > nhi[-1]] = nhi[-1]
+				sbcube = nhi2sb(cubes)
+				sbcube[sbcube == sb[0]] == 0
+				hdu.data = sbcube
+				hdu.writeto('%s/snap%d_%s.SB.fits' % (cubefolder, snap, coord), clobber=True)
+				print 'done SB cube'
 
 if sql:
 	conn = eagleSqlTools.connect('sgallego', 'dpTT852J')
@@ -478,6 +332,223 @@ if sql:
 		np.savetxt('../../EAGLE/cats/gals_%d.dat' % snap, data,
 				   header='x y z vx vy vz redshift stellar_mass SFR DM_mass gass_mass size SubGroupNumber '
 						  'U G R I Z Y J H K f_V f_R Rmean200 Mmean200')
+
+if sphericalLLS:
+	LLSfracs_xyz = []
+	LLScums_xyz = []
+
+	cn = coordnames[0]
+	c = coords[0]
+	fit = fits[0]
+	# for cn, c, fit in zip(coordnames, coords, fits):
+	for snap in [10, 11, 12]:
+		print 'Collapsed axis:', cn
+		llsfrac_name = '../../EAGLE/LLS/LLSfracs_snap%d_%s.dat' % (snap, cn)
+		llscum_name = '../../EAGLE/LLS/LLScums_snap%d_%s.dat' % (snap, cn)
+		isfiles = os.path.isfile(llsfrac_name) & os.path.isfile(llscum_name)
+
+		if not isfiles:
+			yl, xl = fit.shapenethz
+			_y, _x = np.ogrid[1: yl + 1, 1: xl + 1]
+			LLSfracs = []
+			LLScums = []
+
+			for i in (ids - 1):
+				print 'Galaxy %d of %d' % (i + 1, ngal)
+				x0 = c[0][i]
+				y0 = c[1][i]
+				# cool = ids == i
+				nrads = len(rads)
+				LLSfrac = []
+				LLScum = []
+
+				for j in range(nrads - 1):
+					cool = ((_x - x0 - .5) ** 2 + (_y - y0 - .5) ** 2 < rads[j + 1] ** 2)
+					LLScum.append(np.nanmean(fit[cool]))
+					cool &= ((_x - x0 - .5) ** 2 + (_y - y0 - .5) ** 2 >= rads[j] ** 2)
+					LLSfrac.append(np.nanmean(fit[cool]))
+
+				if 0:
+					plt.plot(rad_asec, LLSfrac)
+					plt.xlabel('distance[arcsec]')
+					plt.ylabel('LLS fraction')
+					plt.savefig('../../EAGLE/LLS/plots/lls_frac%d.png' % (i + 1))
+					# plt.show()
+					plt.close()
+
+				LLSfracs.append(LLSfrac)
+				LLScums.append(LLScum)
+
+			LLSfracs = np.array(LLSfracs).T
+			np.savetxt(llsfrac_name, LLSfracs)
+			LLSfracs_xyz = np.concatenate(LLSfracs_xyz, LLSfracs)
+			LLScums = np.array(LLScums).T
+			np.savetxt(llscum_name, LLScums)
+			LLScums_xyz = np.concatenate(LLScums_xyz, LLScums)
+
+		if isfiles: LLSfracs = np.loadtxt(llsfrac_name)
+		LLS1 = [np.median(l) for l in LLSfracs]
+		LLSstd1 = [np.std(l) for l in LLSfracs]
+		plt.plot(rad_asec, LLS1, lw=2)
+		plt.ylim(0, 1)
+		plt.xlabel('distance[arcsec]')
+		plt.ylabel('LLS fraction')
+		plt.errorbar(rad_asec, LLS1, yerr=LLSstd1)
+		plt.savefig('../../EAGLE/LLS/plots/LLSfracs_snap%d_%s.png' % (snap, cn))
+		# plt.show()
+		plt.close()
+		plt.plot(rad_asec, LLS1, lw=2)
+		plt.ylim(0, 1)
+		plt.xlim(0, 8)
+		plt.xlabel('distance[arcsec]')
+		plt.ylabel('LLS fraction')
+		plt.errorbar(rad_asec, LLS1, yerr=LLSstd1)
+		plt.savefig('../../EAGLE/LLS/plots/LLSfracs-close_snap%d_%s.png' % (snap, cn))
+		# plt.show()
+		plt.close()
+
+		if isfiles: LLScums = np.loadtxt(llscum_name)
+		LLS = [np.median(l) for l in LLScums]
+		LLSstd = [np.std(l) for l in LLScums]
+		plt.plot(rad_asec, LLS, lw=2)
+		plt.semilogy()
+		plt.ylim([0.015, 1])
+		plt.yticks([.03, 0.1, .3, 1], ('0.03', '0.1', '0.3', '1'))
+		plt.xlabel('distance[arcsec]')
+		plt.ylabel('f_LLS(r<R)')
+		plt.errorbar(rad_asec, LLS, yerr=LLSstd)
+		plt.savefig('../../EAGLE/LLS/plots/LLScums_%s_%s.png' % (snap, cn))
+		# plt.show()
+		plt.close()
+
+		LLS = [np.median(l) for l in LLScums]
+		LLSstd = [np.std(l) for l in LLScums]
+		x = 0.042 * np.array(rad_asec) ** 2
+		dndz = np.array(LLS) * x
+		dndzstd = np.array(LLSstd) * x
+		plt.plot(rad_asec, dndz, lw=2)
+		# plt.ylim([0.1, 1])
+		plt.semilogy()
+		plt.xlabel('distance[arcsec]')
+		plt.ylabel('dn/dz(LLS,r<R)')
+		plt.errorbar(rad_asec, dndz, yerr=dndzstd)
+		plt.savefig('../../EAGLE/LLS/plots/lls_dndz_%s.png' % cn)
+		# plt.show()
+		plt.close()
+
+if pairLLS:
+	for snap in [10, 11, 12]:
+		for coord in ['x', 'y', 'z']:
+			pairs = getdata('../../EAGLE/cats/lae_pairs_snap%d.fits' % snap, 1)
+			id1 = pairs['id1']
+			id2 = pairs['id2']
+			x1 = pairs['x1']
+			y1 = pairs['y1']
+			z1 = pairs['z1']
+			x2 = pairs['x2']
+			y2 = pairs['y2']
+			z2 = pairs['z2']
+			nw1 = pairs['nw1']
+			nw2 = pairs['nw2']
+			theta = pairs['theta%s' % coord]
+			dist = pairs['com_dist']
+			xs = np.concatenate([np.arange(0, 24, 2), [28, 36, 54, 82, 150]]).astype('int')
+			nsteps = len(xs) - 1
+			# Approx 1 arcsec height
+			ymin = -2.5
+			ymax = 2.5
+			fracs = []
+			fracs_av = []
+			f1 = '../../EAGLE/LLS/all_fracs_snap%d_%s.dat' % (snap, coord)
+			f2 = '../../EAGLE/LLS/all_fracs_av_snap%d_%s.dat' % (snap, coord)
+			pairsname = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/LLScats/cubical_pair'
+			good_pairs = [os.path.isfile(pairsname + '%d-%d.h5' % (i1, i2)) for i1, i2 in zip(id1, id2)]
+			i1good = id1[good_pairs]
+			i2good = id2[good_pairs]
+			overwrite = False
+
+			if not os.path.isfile(f1) or not os.path.isfile(f2) or overwrite:
+				for i1, i2 in zip(i1good, i2good):
+					print 'Pair %d-%d' % (i1, i2)
+					cat = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/cats/logNHI_snap%d_%scubical_pair%d-%d.h5' \
+						  % (snap, coord, i1, i2)
+					data = h5py.File(cat, 'r')
+					x = np.array(data['px'])
+					y = np.array(data['py'])
+					f = np.array(data['flux'])
+					frac = []
+					frac_av = []
+					for i in range(nsteps):
+						oriented = (ymin <= y) & (y <= ymax) & (xs[i] <= x) & (x < xs[i + 1])
+						average = ((ymin <= x) & (x <= ymax) & (xs[i] <= y) & (y < xs[i + 1])) | \
+								  ((ymin <= y) & (y <= ymax) & (-xs[i] > x) & (x >= -xs[i + 1])) | \
+								  ((ymin <= x) & (x <= ymax) & (-xs[i] > y) & (y >= -xs[i + 1]))
+						frac.append(np.nanmean(f[oriented]))
+						frac_av.append(np.nanmean(f[average]))
+					fracs.append(frac)
+					fracs_av.append(frac_av)
+				np.savetxt(f1, fracs)
+				np.savetxt(f2, fracs_av)
+				fracs = np.array(fracs)
+				fracs_av = np.array(fracs_av)
+			else:
+				fracs = np.loadtxt(f1)
+				fracs_av = np.loadtxt(f2)
+
+			good_theta = theta > 20
+			# distbins = [1, 3, 5, 10, 15, 20]
+			mubins = [[-22, -19], [-19, -16.5]]  # [-17, -19, -20, -21, -23]
+			mrbins = [[-23, -20], [-20, -17]]  # [-17, -19, -20, -21, -23]
+			nwbins = [[0, 15], [10, 22], [18, 22], [15, 22]]
+			rads = xs[1:] * pix2deg * 3600
+
+			means_av = []
+			stds_av = []
+			for xx in range(nsteps):
+				means_av.append(np.nanmean(fracs_av[:, xx]))
+				stds_av.append(np.nanstd(fracs_av[:, xx]))
+
+			dmax = 5
+			umax = -19
+			ugood = ids[mu <= umax]
+			others = [(ii1 in ugood) & (ii2 in ugood) for ii1, ii2 in zip(id1, id2)]
+			others &= (dist <= dmax)
+			_s = 'dmax%d_umax%d' % (dmax, umax)
+			# for i in range(len(magbins)-1):
+			#    idgood = ids[(magbins[i]>=mu) & (mu>=magbins[i+1])]
+
+			props = [mr, mu, nw]
+			bins = [mrbins, mubins, nwbins]
+			names = ['mr', 'mu', 'nw']
+
+			for j in range(len(bins)):
+				for i in range(len(bins[j])):
+					idgood = ids[(bins[j][i][0] <= props[j]) & (props[j] <= bins[j][i][1])]
+					cool = []
+					for ii1, ii2 in zip(id1, id2):
+						cool.append((ii1 in idgood) & (ii2 in idgood))
+					cool &= good_theta & others
+					cool = cool[good_pairs]
+					frac_cool = fracs[cool]
+					means = []
+					stds = []
+					for xx in range(nsteps):
+						means.append(np.nanmean(frac_cool[:, xx]))
+						stds.append(np.nanstd(frac_cool[:, xx]))
+
+					plt.plot(rads, means, label='Oriented to neighbour', color='blue')
+					plt.errorbar(rads, means, yerr=stds, color='blue')
+					plt.plot(rads, means_av, label='Random orientations', color='gray')
+					# plt.errorbar(rads, means_av, yerr=stds_av, color='gray')
+					plt.xlabel('distance [arcsec]')
+					plt.ylabel('LLS fraction')
+					plt.legend(loc='best')
+					# plt.semilogy()
+					plt.ylim(0, 0.3)
+					plt.xlim(2, 15.5)
+					plt.savefig('../../EAGLE/LLS/plots/LLSfrac_pairs+circular_%s_%s%d_%d.png' % (
+						_s, names[j], bins[j][i][0], bins[j][i][1]))
+					plt.close()
 
 if sbhist:
 
@@ -1095,68 +1166,190 @@ if h2d:
 	print 'Total SNR MOSAIC %.3f rand %.3f' % (SNR_tot2, SNRrand_tot2)
 	print 'f_conn MOSAIC %.3f' % (fconn2)
 
-if nhiprof:
-	s='11'
-	H0=69.3
-	Ol = 0.714
-	Om = 1-0.714
-	red = redshifts[s]
-	f1 = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/'
-	f2 = '/net/abnoba/scratch2/gallegos/Research/MUSE/EAGLE/'
-	dat = getdata(f2+'cats/gals_snap11.fits', 1)
-	m = dat['DM_mass']
-	v = {}
-	offset = {}
-	for c in coordnames:
-		v[c] = dat['v%s' % c]
-		offset[c] = v[c]*(1+red)/H0/np.sqrt(Om*(1+red)**3+Ol)
+if halfplot:
+	print 'halfplot'
 
-	print 'min %.3e, max %.3e, mean %.3e, median %.3e' % (np.amin(m), np.amax(m), np.nanmean(m), np.nanmax(m))
-	id = dat['ID']
-	f = []
-	for c in coordnames:
-		for i in id:
-			print i, c
-			f.append(getdata(f1+'gals/snap11_%s/%d.NHI.fits' % (c, i)))
-	mmin = 3e9
-	mmax = 5e11
-	lm = np.log10(m)
-	lm = np.concatenate([lm, lm, lm], 0)
-	r = np.arange(9.5, 12.5, .5)
-	fm = []
-	f = np.array(f)
-	for i in range(len(r) - 1):
-		print r[i], r[i + 1]
-		fm.append(np.nanmean(f[(lm > r[i]) & (lm < r[i + 1]), :, :, :], 0))
-	fm = np.array(fm)
+if circlehist:
+	ax = plt.subplot(111, polar=True)
+	max_rad = 2
+	bottom = 1
+	delta = .5
+	# ax.set_rmax(max_rad * 2)
+	ax.set_yticklabels([])
+	pairs = getdata('../../EAGLE/cats/lae_pairs.fits', 1)
+	id1 = pairs['id1']
+	id2 = pairs['id2']
+	x1 = pairs['x1']
+	y1 = pairs['y1']
+	z1 = pairs['z1']
+	x2 = pairs['x2']
+	y2 = pairs['y2']
+	z2 = pairs['z2']
+	nw1 = pairs['nw1']
+	nw2 = pairs['nw2']
+	theta = pairs['theta']
+	dist = pairs['com_dist']
+	umax = -19
+	idgood = ids[mu <= umax]
+	nwmin = 15
+	cool = []
+	pairsname = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/LLScats/cubical_pair'
+	for i1, i2 in zip(id1, id2):
+		cool.append((i1 in idgood) & (i2 in idgood) & (os.path.isfile(pairsname + '%d-%d.h5' % (i1, i2))))
+	cool &= (id1 != id2) & (theta > 16) & (dist < 5) & (nw1 > nwmin) & (nw2 > nwmin)
+	print 'Cools ids', np.sum(cool), 'of', len(id1)
+	LLSrads = []
+	angbins = []
+	nrad = 0
+	nrads = len(rads)
+	nbins = []
+	angbins = []
+	delta_angs = []
+	nangs = []
+	llsangs = []
+	rads = [0, 2, 6, 12, 20, 30, 60]
+	rad2 = [.5, 1, 2, 2, 1, 1, 1]
+	rad3 = [0, .5, 1.5, 3.5, 5.5, 6.5, 7.5]
+	rad4 = [1, 6, 12, 20, 30, 60]
+	nrads = len(rads)
+	for j in range(nrads - 1):
+		delta_ang = np.pi / float(rad4[j])
+		angbin = np.arange(0., 2 * np.pi + 1e-10, 2 * delta_ang)
+		nbin = len(angbin) - 1
+		nbins.append(nbin)
+		angbins.append(angbin)
+		LLSrads.append(np.zeros(nbin))
+		delta_angs.append(delta_ang)(px > xmin) & (px < xmax) & (py > ymin) & (py < ymax)
 
-	if 1:
-		hdu = PrimaryHDU()
-		for i in range(len(r) - 1):
-			hdu.data = fm[i]
-			hdu.writeto('radprof_logm%.1f-%.1f.fits', clobber=True)
-		for i in range(len(r) - 1):
-			hdu.data = fm[i]
-			hdu.writeto('radprof_logm%.1f-%.1f.fits' % (r[i], r[i + 1]), clobber=True)
+	filedat = '../../EAGLE/LLS/llscumang.dat'
+	overwrite = True
 
-	n, zl, yl, xl = fm.shape
-	y, x = np.ogrid[0: yl, 0: xl]
-	rs = np.array([0, 1, 2, 4, 6, 8, 10, 15, 20, 30, 40])
-	nr = len(rs)
-	asec2pix = asec2kpcs[s] * (1 + redshifts[s]) * kpc2pix
-	rp = rs/asec2pix
-	prof = []
-	for i in range(nr-1):
-		cool = ((x-xl/2)**2+(y-yl/2)**2<rp[i+1]) & ((x-xl/2)**2+(y-yl/2)**2>rp[i])
-		prof.append(np.mean(fm[:, zl/2, cool]))
-	prof = np.array(prof)
-	plt.figure()
-	x = (rp[1:]+rp[:-1])/2.
-	for i in range(len(r) - 1):
-		plt.plot(x, prof[:, i])
-	plt.show()
+	if not os.path.isfile(filedat) or overwrite:
+		x = np.array([])
+		y = np.array([])
+		f = np.array([])
+		for i in np.where(cool)[0]:
+			print 'Pair %d-%d' % (id1[i], id2[i])
+			cat = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/LLScats/cubical_pair%d-%d.h5' % (id1[i], id2[i])
+			data = h5py.File(cat, 'r')
+			x = np.concatenate((x, np.array(data['px'])))
+			y = np.concatenate((y, np.array(data['py'])))
+			f = np.concatenate((f, np.array(data['flux'])))
 
-if radprof:
+		for j in range(nrads - 1):
+			d2 = x ** 2 + y ** 2
+			ang = (np.arctan2(y, x) + np.pi - delta_angs[j]) % (2 * np.pi)
+
+			for a in range(nbins[j]):
+				inside = (ang > angbins[j][a]) & (ang <= angbins[j][a + 1]) & (d2 < rads[j + 1] ** 2) & (
+					d2 < rads[j] ** 2)
+				LLSrads[j][a] = np.nanmean(f[inside])
+
+		fout = open(filedat, 'w')
+		for line in LLSrads:
+			for row in line:
+				if np.isnan(row):
+					fout.write('0. ')
+				else:
+					fout.write('%f ' % float(row))
+			fout.write('\n')
+		fout.close()
+
+	else:
+		fin = open(filedat, 'r')
+		j = 0
+		for line in fin:
+			a = 0
+			for row in line.split():
+				LLSrads[j][a] = float(row)
+				a += 1
+			j += 1
+		fin.close()
+
+	for j in range(nrads - 1):
+		if j == 0:
+			ec = "none"
+		else:
+			ec = "black"
+		bars = ax.bar(angbins[j][:-1] + delta_angs[j], np.zeros(len(angbins[j]) - 1) + rad2[j], width=2 * delta_angs[j],
+					  bottom=rad3[j], edgecolor=ec, linewidth=.5)
+		mlr = max(LLSrads[j])
+		for bar, lr in zip(bars, LLSrads[j]): bar.set_facecolor(plt.cm.jet(1.6 * lr))
+
+	plt.savefig('../../EAGLE/LLS/plots/circhist.png')
+	plt.close()
+
+if lutzmodel:
+
+	for snap in [10, 11, 12]:
+		data = getdata('../../EAGLE/cats/gals_snap%s.fits' % coord, 1)
+		comx = data['x']
+		comy = data['y']
+		comz = data['z']
+		x = comx * com2pix
+		y = comy * com2pix
+		z = comz * com2pix
+		pos = [[y, z], [x, z], [x, y]]
+
+		for coord, xp, yp in zip(['x', 'y', 'z'], ):
+
+			outfile = '../../EAGLE/LLS/LLSfracs_%s_%s.dat' % (snap, coord)
+			overwrite = False
+			if os.path.isfile(outfile) and not overwrite:
+				mat = np.loadtxt(outfile).T
+				rad_asec = mat[0] / 5.
+				llsin = mat[1]
+				stdin = mat[2]
+				llsout = mat[3]
+				stdout = mat[4]
+			else:
+				fits = getdata(
+					'/net/galaxy-data/export/galaxydata/gallegos/EAGLE/logNHI_snap%d_%s.fits' % (snap, coord))
+				inside = False
+				xpos = y
+				ypos = z
+				l = 4096
+				# 1 spaxel is (0.2 arcsec)^2
+				rads = [5, 10, 20, 40, 60, 80, 100, 120, 160, 200]
+				rad_asec = np.array(rads) / 5
+				_y, _x = np.ogrid[0: l, 0: l]
+				llsin = []
+				llsout = []
+				stdin = []
+				stdout = []
+				for r in rads:
+					print 'Inside %d arcsec' % (r / 5)
+					for i, j, gal in zip(xpos, ypos, ids):
+						# print 'Gal %d x %d y %d' % (gal, i, j)
+						inside |= (_x - i) ** 2 + (_y - j) ** 2 < r ** 2
+
+					_llsin = np.nanmean(fits[inside])
+					_llsout = np.nanmean(fits[~inside])
+					_stdin = np.nanstd(fits[inside])
+					_stdout = np.nanstd(fits[~inside])
+					print 'f_LLS inside %f, outside %f' % (_llsin, _llsout)
+					llsin.append(_llsin)
+					llsout.append(_llsout)
+					stdin.append(_stdin)
+					stdout.append(_stdout)
+
+				mat = np.array([rads, llsin, stdin, llsout, stdout]).T
+				np.savetxt(outfile, mat, header='distance_pix LLS_in std_LLS_in LLS_out std_LLS_out')
+
+			plt.plot(rad_asec, llsin, lw=2, color='blue', label='Inside')
+			plt.plot(rad_asec, llsout, lw=2, color='red', label='Outside')
+			plt.ylim(0, .4)
+			# plt.semilogy()
+			plt.xlabel(u'$\mathrm{distance\,[arcsec]}$', fontsize=18)
+			plt.ylabel(u'$f_{\mathrm{LLS}}(\mathrm{r<R})}$', fontsize=18)
+			plt.errorbar(rad_asec, llsin, yerr=stdin, color='blue')
+			plt.errorbar(rad_asec, llsout, yerr=stdout, color='red')
+			plt.savefig('../../EAGLE/LLS/plots/LLSfracs_snap%d_%s.png' % (snap, coord))
+			# plt.show()
+			plt.close()
+
+if 1:
+	zw = 1
 	feagle = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/'
 	rads = np.array([[0, 2], [2, 4], [4, 6], [6, 8], [8, 12], [12, 16],
 			[16, 20], [20, 24], [24, 30], [30, 40], [40, 60], [60, 80], [80, 100], [100, 150], [150, 200]])
@@ -1169,9 +1362,8 @@ if radprof:
 		data = getdata('../../EAGLE/cats/gals_snap%d.fits' % s, 1)
 		asec2pix = asec2kpc*(1+red)*kpc2pix
 		radpix = rads*asec2pix
-		rcubes = []
 		for c in coordnames:
-			cube = getdata('%s/snap%d_%s.NHI.fits' % (feagle, s, c))
+			cube = getdata('%s/snap%d_%s.LLS.fits' % (feagle, s, c))
 			zl, yl, xl = cube.shape
 			ids = data['ID']
 			cs = ['x', 'y', 'z']
@@ -1179,244 +1371,69 @@ if radprof:
 			xs = np.round(data[cs[0]] * xl / coml).astype(int)
 			ys = np.round(data[cs[1]] * yl / coml).astype(int)
 			zs = np.round(data[c] * zl / coml).astype(int)
-
 			for i, x, y, z in zip(ids, xs, ys, zs):
 				print i, x, y, z
-				radname = '%s/gals/snap%d_%s/%d.RADPROF.fits' % (feagle, s, c, i)
-				if not os.path.isfile(radname) or overwrite:
-					pos = (xo - x) ** 2 + (yo - y) ** 2
-					frad = []
-					for r in radpix:
-						cool = (pos > (r[0])**2) & \
-							   (pos < (r[1])**2)
-						fcool = np.nanmean(cube[:, cool], 1)
-						frad.append(np.roll(fcool, zl/2-z))
-					rcube = np.array(frad)
-					hdu.data = rcube
-					hdu.writeto(radname, clobber=True)
-				else: rcube = getdata(radname)
-				rcubes.append(rcube)
-		hdu.data = np.nanmean(rcubes, 0)
-		hdu.writeto('%s/gals/snap%d.RADPROF.fits' % (feagle, s), clobber=True)
-
-if galcov:
-	zw0 = 2
-	folder = '/net/abnoba/scratch2/gallegos/Research/MUSE/'
-
-	cov = {}
-	rads = [[0.1, 2], [2, 4], [4, 8], [8, 12], [12, 16], [16, 20], [20, 30]]#, [30, 60], [60, 100]]
-	nr = len(rads)
-	for ff in ['UDF', 'HDFS']:#, 'mosaic']:
-		pairs = getdata('../../%s/cats/lae_pairs.fits' % ff, 1)
-		theta = pairs['theta']
-		cool = (abs(pairs['shear']) <= zw0)# & (pairs['redshift1']<=3) & (pairs['redshift2']<=3)
-		theta = theta[cool]
-		cov[ff] = np.zeros(nr)
-		for i in range(nr):
-			area = np.pi*(rads[i][1]**2-rads[i][0]**2)
-			inside = (theta > rads[i][0]) & (theta < rads[i][1])
-			_cov = np.sum(inside)/area
-			print 'catalog', ff, 'rads', rads[i], 'fgal %.3f area %.3e arcsec^2' % (_cov, area)
-			cov[ff][i] = _cov
-
-	ce = {}
-	for coord in coordnames:
-		for snap in snaps:
-			k = '%d_%s' % (snap, coord)
-			ce[k] = np.zeros(nr)
-			cs = ['x', 'y', 'z']
-			cs.remove(coord)
-			pairs = getdata('../../EAGLE/cats/lae_pairs_snap11.fits', 1)
-			theta = pairs['theta%s' % coord]
-			cool = abs(pairs['shear%s' % coord]) <= zw0
-			for i in range(nr):
-				area = np.pi*(rads[i][1]**2-rads[i][0]**2)
-				inside = (theta > rads[i][0]) & (theta < rads[i][1])
-				_cov = np.sum(inside)/area
-				print k, 'r', rads[i], 'fgal %.3f area %.3e' % (_cov, area)
-				ce[k][i] = _cov
-	cov['EAGLE'] = np.nanmean([ce[_ce] for _ce in ce.iterkeys()], 0)
-	plt.figure()
-	rm = np.mean(rads, 1)
-	import itertools
-	marker = itertools.cycle(('*', 'X', '^', 'h', 'd'))
-
-	for k in cov.iterkeys():
-		plt.plot(rm, cov[k])
-		plt.scatter(rm, cov[k], label=k, marker=marker.next(), s=30)
-	plt.legend()
-	plt.semilogy()
-	plt.xlabel(r'distance [arcsec]')
-	plt.ylabel(r'$\mathrm{f_{gal}\,[arcsec^{-2}\,\Delta v^{-1}}]$')
-	plt.savefig('../../Figures/Gal_covfrac.jpg')
-
-if cubecorr:
-	folder = '/net/galaxy-data/export/galaxydata/gallegos/'
-	fitcat = ['mosaic', 'UDF', 'HDFS']
-	names = ['DATACUBE_UDF-MOSAIC.z1300', 'DATACUBE_UDF-10', 'DATACUBE-HDFS-1.35-PROPVAR']
-	mnames = ['DATACUBE_UDF-MOSAIC.z1300.IM.Objects_Id', 'UDF10.z1300.IM.Objects_Id',
-			  'DATACUBE-HDFS-1.35-PROPVAR.IM.Objects_Id']
-	ext = '.fits'
-	cut = 20
-	dim = (1, 2)
-	for ft, name, mname in zip(fitcat, names, mnames)[:1]:
-		print ft
-		spec = open('%sspec.dat' % ft, 'w')
-		spec.write('#layer mean_1l mean_5l\n')
-		fin = '%s%s/%s' % (folder, ft, name)
-		fcsub = '%s.csub' % fin
-		fout = '%s.corr' % fcsub
-		fmask = '%s%s/%s' % (folder, ft, mname)
-
-		print 'get original csub cube'
-		cube = getdata(fcsub+ext)
-		cube[cube == -999] = np.nan
-		z, y, x = cube.shape
-
-		print 'mask continuum objects'
-		_f = np.copy(cube)
-		if not os.path.isfile(fcsub+ext):
-			os.system("CubeBKGSub -cube %s%s -out %s%s -bpsize '1 1 20' -bfrad '0 0 2'" % (fin, ext, fcsub, ext))
-		mask = getdata(fmask+ext)
-		bad = mask[0] > 0
-		_f[:, bad] = np.nan
-
-		print 'find high bkg layers'
-
-		zw0 = 2
-		print 'Calculate mean bkg for non high layers, smoothed!!'
-		m = np.nanmean(_f[:, cut: y - cut, cut: x - cut], dim)
-		for zz in range(z):
-			zmin = max(0, zz-zw0)
-			zmax = min(z, zz+zw0)
-			m5 = np.nanmean(_f[zmin: zmax+1, cut: y - cut, cut: x - cut])
-			print '%d %f %f' % (zz, m[zz], m5)
-			spec.write('%d %f %f\n' % (zz, m[zz], m5))
-			cube[zz, :, :] -= m5
-		mm = np.nanmean(m)
-		print 'mean sb value', mm, 'sum of all layers with their non masked pixels', mm*z
-		std = np.nanstd(m)
-		high = abs(m-mm) > 3*std
-		print np.sum(high), 'high bkg layers of', z, 'std', std
-		_f[high, :, :] = np.nan
-
-		hdu = PrimaryHDU()
-		hdu.data = cube
-		hdu.writeto(fout+ext, clobber=True)
-
-if laemask:
-	import astropy.io.fits as fits
-	from astropy import wcs
-
-	def l2pix(l):
-		"""Convert wavelength to pixels"""
-		l0 = 4750.
-		pixsize = 1.25  # 1 pixel = 1.25 Angstrom
-		return (l - l0) / pixsize + 1
-	fin = '../../'
-	fout = '/net/galaxy-data/export/galaxydata/gallegos/'
-	ext = '.fits'
-	cat = getdata(fin + 'UDF/cats/laes.fits', 1)
-	cubename = '%s/DATACUBE_UDF-10.fits' % fout
-	_cube = getdata(cubename)
-	zl, yl, xl = _cube.shape
-	hname = '%s/UDF/UDF10.z1300.fits' % fout
-	ttt, header_data_cube = getdata(hname, 0, header=True)
-	ra = cat['RA']
-	dec = cat['DEC']
-	wavelength = cat['LYALPHA_LBDA_OBS']
-	ids = cat['ID']
-	# Removing COMMENT key to avoid problems reading non-ascii characters
-	cards = header_data_cube.cards
-	bad = ['COMMENT' == b[0] for b in cards]
-	for i in range(np.sum(bad)): header_data_cube.remove('COMMENT')
-	hdulist = fits.open(cubename)
-	w = wcs.WCS(header_data_cube, hdulist)
-	x, y, z = np.round(w.all_world2pix(ra, dec, [1] * len(ra), 1)).astype(int)
-	z = np.round(l2pix(wavelength)).astype(int)
-	zw0 = 2
-	_y, _x = np.ogrid[0:yl, 0:xl]
-	cube = np.zeros((zl, yl, xl))
-	rad = 40 # 8 arcsec
-	for i in range(len(z)):
-
-		gal = (x[i]-_x)**2+(y[i]-_y)**2 < rad**2
-		print i, np.sum(gal)
-		zmin = max(0, z[i] - zw0)
-		zmax = min(zl, z[i] + zw0)
-		cube[zmin: zmax+1, gal] = ids[i]
-	#hdu = PrimaryHDU()
-	#hdu.data = cube
-	#hdu.writeto(fout+'UDF/UDF.galmask_8arcsec.fits', clobber=True)
+				pos = (xo - x) ** 2 + (yo - y) ** 2
+				frad = []
+				for r in radpix:
+					cool = (pos > (r[0])**2) & \
+						   (pos < (r[1])**2)
+					fcool = np.nanmean(cube[:, cool], 1)
+					frad.append(np.roll(fcool, zl/2-z))
+				hdu.data = np.array(frad)
+				hdu.writeto('%s/gals/snap%d_%s/%d.RADPROF.fits' % (feagle, s, c, i), clobber=True)
 
 if snr:
-	def sclipping(fits, nsigma, dim=(0), mask=None):
+	def sclipping(fits, nsigma, dim=None, mask=None):
 		# print 'Asign nan to values > nsigma in a fits array'
-		for i in range(len(fits)):
-			fits[i, :, np.where(mask)[i]] = np.nan
-		stds = np.nanstd(fits, dim)
+		if dim is None:
+			stds = np.nanstd(fits[:, mask])
+		else:
+			stds = np.nanstd(fits[:, mask], dim)
 		high_sigma = np.abs(fits) > nsigma * stds
 		fits[high_sigma] = np.nan
-		return fits
+		return fits, stds
+
 
 	folder = '/net/abnoba/scratch2/gallegos/Research/MUSE/'
 	flaes = '/net/galaxy-data/export/galaxydata/gallegos/'
 	fstack = folder + '/all/stacks/d0-20_pd16-80_z2.9-4.0_l1-2000_n1-100/'
-	scat = ''
-	for i in fitcat: scat += '_' + i
-	ncores = 10
-	nrand = 10
-	zw0 = rdarg(argv, 'zw', int, 2)
-	ptype = rdarg(argv, 'ptype', str, '')
-	do_laes = 0
-	do_eagle_gals, do_eagle, do_eplot = 0, 0, 0
-	vcorr = 1
-	do_muse, do_rand, do_mplot = 0, 1, 0
-	do_spectra = 0
-	do_snr = 0
-	do_mask = mask
-	do_sclip = 0
-	fix_red = 0
-	zoff = 0
-	spectype = [2]
-	sspec = '.spec'
-	for _sp in spectype: sspec += '%d' % _sp
-	if ptype=='laes':
-		do_laes = 1
-		do_rand = 0
-		do_muse = 1
-		do_spectra = 1
-		zw0 = 0
-		fix_red = 1
-	if ptype=='spectra':
-		do_muse = 1
-		do_spectra = 1
-		zw0 = 0
 
-	if ptype=='muse':
-		do_muse = 1
-		do_mplot = 1
-		zw0 = 2
-	if ptype=='snr':
-		do_eagle = 1
-		do_muse = 1
-		do_snr = 1
-		zw0 = 0
-		zoff = 0
-	if ptype=='eagle':
-		do_eagle =1
-		do_eplot = 1
-		zw0 = 2
-	zw = 2*zw0+1
+	ncores = 10
+	zw = 2
 	SB = 1.27  # SB at z=3.5
 	type = 'LLS'  # 'NHI'
-	nsigma = 3
+
+	# oriented
+	if 0:
+
+		feagles = []
+		for s in [10, 11, 12]:
+			for c in ['x', 'y', 'z']:
+				feagles.append(getdata(
+					folder + '/EAGLE/stacks/snap%d_%s_d0-20_pd16-2000_d5th0.5-20.0_u0.0-99.0/stack.fits' % (s, c)))
+		feagle = np.nanmean(feagles, 0)
+		fits = getdata(fstack + 'stack.fits')
+		zl, xl, yl = fits.shape
+		frands = []
+		for i in range(200):
+			frands.append(
+				np.nansum(getdata(fstack + 'randoms/random_stack.%d.fits' % i)[zl / 2 - zw:zl / 2 + zw + 1, :, :], 0))
+		# 1 spaxel is (0.4 arcsec)^2
+		# 7.8125 comes from 1.25 Angstrom wavelength width times 1/(0.4)**2 from conversion to the correct aperture
+		conv = 7.8125
+		fits = np.nansum(fits[zl / 2 - zw:zl / 2 + zw + 1, :, :], 0)  # stack is in flux!
+		zle, xle, yle = feagle.shape
+		feagle = np.nanmean(feagle[zle / 2 - zw:zle / 2 + zw + 1, :, :], 0)
+	# end oriented
 
 	# 1 spaxel is (0.2 arcsec)^2
-	# flux2sb comes from 1.25 Angstrom wavelength width times 1/(0.2)**2 from flux2sbersion to the correct aperture
-	flux2sb = 31.25
+	# conv comes from 1.25 Angstrom wavelength width times 1/(0.2)**2 from conversion to the correct aperture
+	conv = 31.25
 
-	if do_eagle_gals:
+	# laes
+	do_laes=False
+	if do_laes:
 		fall = []
 		fstds = []
 		hdu = PrimaryHDU()
@@ -1457,7 +1474,7 @@ if snr:
 
 				for c in coordnames:
 					for i, u, m in zip(ids, us, n5d):
-						ffits = flaes + '/EAGLE/gals/snap%d_%s/%d.%s.fits' % (s, c, i, type)
+						ffits = flaes + '/EAGLE/gals/snap%d_%s/%d.fits' % (s, c, i)
 						print ffits
 						if os.path.isfile(ffits):
 							fit = getdata(ffits)
@@ -1486,618 +1503,188 @@ if snr:
 		hdu.data = fcomb
 		hdu.writeto('../../EAGLE/simplestacks/snaps10-11-12.%s.fits' % type, clobber=True)
 
-	fdat = 'muse-vs-eagle%s.dat' % scat
-	_fin = None
-	if do_eagle:
-		do_emask = mask
-		cat = getdata('../../EAGLE/cats/gals_snap11.fits', 1)
-		f2 = '/net/abnoba/scratch2/gallegos/Research/MUSE/EAGLE/'
-		dat = getdata(f2 + 'cats/gals_snap11.fits', 1)
-		m = dat['DM_mass']
-		s = '11'
-		H0 = 69.3
-		Ol = 0.714
-		Om = 1 - 0.714
-		red = redshifts[s]
-		offset = dat['vx'] * (1 + red) / H0 / np.sqrt(Om * (1 + red) ** 3 + Ol)
-		offpix = np.round(offset*zlens['11']/coml).astype(int)
+	if 0:
 
-		pnames = ['U', 'SFR', 'Temperature', 'n5d', 'Mmean200']
-		prop = {}
-		pmed = {}
-		for p in pnames:
-			prop[p] = cat[p]
-			pmed[p] = np.nanmedian(prop[p])
-		cename = '../../EAGLE/simplestacks/snap11_x%s%s.fits' % ('.masked'*do_emask, '.vcorr'*vcorr)
-		if not os.path.isfile(cename) or overwrite:
-			stack = []
-			mstack = []
-			for i, off in zip(cat['ID'], offpix):
-				print i, off
-				_s = getdata(flaes + '/EAGLE/gals/snap11_x/%d.%s.fits' % (i, type))
-				if vcorr: _s = np.roll(_s, off, 0)
-				if mask:
-					_m = getdata(flaes + '/EAGLE/gals/snap11_x/%d.mask.fits' % i)
-					gal = _m > 0
-					_s[:, gal] = np.nan
-					mstack.append(_m)
-				stack.append(_s)
-			stack = np.array(stack)
-			_stack = np.nanmean(stack, 0)
-			hdu = PrimaryHDU()
-			hdu.data = _stack
-			hdu.writeto(cename, clobber=True)
-
-			if mask:
-				mstack = np.array(mstack)
-				_mstack = np.nansum(mstack, 0)
-				_mstack2 = np.nanmean(mstack>0, 0)
-				hdu.data = _mstack
-				hdu.writeto(cename.replace('.fits', '.gals.fits'), clobber=True)
-				hdu.data = _mstack2
-				hdu.writeto(cename.replace('.fits', '.galcov.fits'), clobber=True)
-			for p in pnames:
-				high = prop[p] > pmed[p]
-				shigh = np.nanmean(stack[high], 0)
-				slow = np.nanmean(stack[~high], 0)
-				hdu.data = shigh
-				hdu.writeto(cename.replace('.fits', '.high-%s.fits' % p), clobber=True)
-				hdu.data = slow
-				hdu.writeto(cename.replace('.fits', '.low-%s.fits' % p), clobber=True)
-			#del stack, mstack
-
-		feagle = getdata(cename)
-		fhigh, flow = {},{}
-		for p in pnames:
-			fhigh[p] = getdata(cename.replace('.fits', '.high-%s.fits' % p))
-			flow[p] = getdata(cename.replace('.fits', '.low-%s.fits' % p))
-		zl, yl, xl = feagle.shape
-		zle0 = zl
-		if ptype!='snr':
-			_fite = []
-			zrange_e = [zl/2, zl/2+2, zl/2+4, zl/2+8]#np.arange(zl/2-(zl/zw0*zw-zw0, zl/2+(zl/zw0)*zw, zw)
-			#zrange = zrange[(zrange > 0) & (zrange + zw < zl)]
-			for zz in zrange_e:
-				_fite.append(np.nansum(feagle[zz-zw0: zz+zw0+1], 0))
-			feagle = np.array(_fite)
-			del _fite
-		zle, yle, xle = feagle.shape
-		asec2pix_eagle = .1836  # average btw snapshots
-	asec2pix_muse = .2  # muse
-	fall = []
-	fouts = []
-	n5d = []
-	try:
-		glob.os.makedirs('../../all/simplestacks/')
-	except:
-		pass
-
-	wmax = 201/2
-	fall = []
-	mall = []
-	fall2 = []
-	frand = {}
-	mrand = {}
-
-	if do_muse:
-		for nr in range(nrand): frand['%d' % nr], mrand['%d' % nr] = [[], []]
-		for _fitcat in fitcat:
-			cat = getdata('../../%s/cats/laes.fits' % _fitcat, 1)
-			if _fitcat == 'UDF':
-				fwhm = cat['LYALPHA_FWHM_OBS']
-
-			ids = cat['ID']
-			zs = cat['redshift']
-			#ls = np.round((1215.67*(1+zs)-4750.)/1.25).astype(int)
-			ls = 1215.67 * (1 + zs)
-			sconf = cat['sconf']
-			spec = cat['spec']
-
-			scool = False
-			for _sp in spectype: scool |= spec == _sp
-			cool = (sconf >= 2) & (zs < 4) & scool
-			fitin = []
-			corrupt = 0
-			for i, l in zip(ids[cool], ls):
-				ffits = flaes + '/%s/LAEs/%d.fits' % (_fitcat, i)
-				if os.path.isfile(ffits):
-					if do_rand:
-						for nr in range(nrand):
-							try:
-								fr = getdata(ffits.replace('.fits', '.rand%d.fits' %nr))
-								mr = getdata(ffits.replace('.fits', '.rand.mask%d.fits' %nr))
-								zr, yr, xr = fr.shape
-								if ptype=='snr':
-									_fr = fr[:, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-									frand['%d' % nr].append(_fr)
-								else:
-									_fr = fr[zr/2-zw0: zr/2+zw0+1, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-									frand['%d' % nr].append(np.nansum(_fr, 0))
-								_mr = mr[yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-								mrand['%d' % nr].append(_mr)
-							except:
-								#frand['%d' % nr].append(frand['0'])
-								#mrand['%d' % nr].append(mrand['0'])
-								print 'Missing rand?', nr
-								pass
-					try:
-						fit = getdata(ffits)
-						#fall2.append(fit)
-						zlm, ylm, xlm = fit.shape
-						zlm0 = zlm
-						off = 0
-
-						_fit = []
-						if zw0 == 0:
-							_fit = fit[:, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-							zrange = np.arange(zlm)
-						else:
-							#zrange = [zlm/2, zlm/2+zw, zlm/2-zw, zlm/2+2*zw, zlm/2-2*zw, zlm/2+3*zw, zlm/2-3*zw]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
-							zrange = [zlm/2+zoff, zlm/2+3, zlm/2-3, zlm/2+7, zlm/2+10, zlm/2+15, zlm/2+20]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
-							if do_spectra:
-								zrange = np.arange(zlm / 2 - (zlm / zw0) * zw - zw0, zlm / 2 + (zlm / zw0) * zw, zw0)
-								zrange = zrange[(zrange-zw0>0) & (zrange+zw0+1<zlm)]
-							for zz in zrange:
-								fcool = fit[zz-zw0: zz+zw0+1, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-								_fit.append(np.nansum(fcool, 0))
-						_fit = np.array(_fit)
-						fall.append(_fit)
-						if do_mask:
-							mit = getdata(ffits.replace('.fits', '.mask.fits'))
-							_mit = mit[ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-							mall.append(_mit)
-
-						if do_laes:
-							ym, xm = np.ogrid[0: ylm, 0: xlm]
-							rgal = 1/asec2pix_muse
-							rcgm = np.array([2, 5])/asec2pix_muse
-							cm = (xm - xlm / 2.) ** 2 + (ym - ylm / 2.) ** 2
-							gal = (cm < rgal ** 2)
-							cgm = (cm >= rcgm[0] ** 2) & (cm < rcgm[1] ** 2)
-							if mask: _fit[:, np.array(_mit) > 0] = np.nan
-							fgal = np.nanmedian(_fit[:, gal], 1)
-							fcgm = np.nanmedian(_fit[:, cgm], 1)
-							fnan = np.where(np.isnan(fgal))[0]
-							nnan = len(fnan)
-
-							fgal[fnan] = 0
-							fcgm[fnan] = 0
-							galstd = np.nanstd(fgal)
-							cgmstd = np.nanstd(fcgm)
-							galmax = np.nanmax(fgal[zlm/2-6: zlm/2+6])
-							cgmmax = np.nanmax(fcgm[zlm/2-6: zlm/2+6])
-							xmax = np.where(fgal == galmax)[0]-zlm/2
-							xmax2 = np.where(fcgm == cgmmax)[0]-zlm/2
-							print i, 'fgal %.3f std %.3f' % (galmax, galstd), (xmax+1)*68.5
-							print 'fcgm %.3f std %.3f' % (cgmmax, cgmstd), (xmax2+1)*68.5
-							fig, ax = plt.subplots(figsize=(10, 5))
-							xz = (zrange-zlm0/2)
-							xlim = 22
-							_xz = xz*68.5
-							_xlim = xlim*68.5
-							plt.plot(_xz, [0]*len(xz), color='gray')
-							plt.xlim(-_xlim, _xlim)
-							plt.grid()
-
-							plt.xlabel('v [km/s]')
-							plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
-							ax2 = ax.twiny()
-							plt.xlabel(r'wavelength [$\mathrm{\AA}$]')
-							_xz = xz*1.25+l
-							_xlim = xlim*1.25
-
-							plt.plot(_xz, fcgm * flux2sb, label='CGM')
-							plt.scatter(_xz, fcgm*flux2sb)
-							#plt.scatter(xmax, galmax*flux2sb*1.1, label=r'Ly$\alpha$ peak', marker='v')
-							for ff in fnan:
-								plt.axvline(_xz[ff], color='red', linewidth=10, alpha=.2)
-							plt.xlim(l-_xlim, l+_xlim)
-							plt.legend()
-							plt.savefig('../../%s/plots/%d_CGMspec.jpg' % (_fitcat, i))
-							plt.plot(_xz, fgal * flux2sb, label='Galaxy')
-							plt.scatter(_xz, fgal * flux2sb)
-							plt.savefig('../../%s/plots/%d_spec.jpg' % (_fitcat, i))
-							plt.close()
-					except:
-						corrupt += 1
-						print 'Problem!?', ffits
-						pass
-
-
-		if ptype!='laes':
-			fall = np.array(fall)
-			# median or mean with sclipping?
-			#fmuse = np.nanmedian(fall, 0)
-			if do_mask:
-				bad = np.array(mall) > 0
-				for i in range(len(fall)):
-					fall[i, :, bad[i]] = np.nan
-			if do_sclip:
-				stds = np.nanstd(fall, 0)
-				high_sigma = np.abs(fall) > nsigma * stds
-				fall[high_sigma] = np.nan
-			#return fits
-			#fall = sclipping(fall, nsig, mask=bad)
-			fmuse = np.nanmean(fall, 0)
-
-
-			#fall2 = np.array(fall2)
-			#fall2 = sclipping(fall2, 5, 0)[0]
-			#fmuse2 = np.nanmean(fall2, 0)
-			hdu = PrimaryHDU()
-			hdu.data = fmuse
-			hdu.writeto('../../all/simplestacks/stack%s%s%s%s.fits' % (scat, '.mask'*do_mask, sspec,
-																	   extraname), clobber=True)
-
-			if do_rand:
-				for nr in range(nrand):
-					frand['%d' % nr] = np.array(frand['%d' % nr])
-					if do_mask:
-						for i in range(len(frand['%d' % nr])):
-							bad = np.array(mrand['%d' % nr][i] > 0)
-							if ptype=='snr': frand['%d' % nr][i, :, bad] = np.nan
-							else: frand['%d' % nr][i, bad] = np.nan
-					if do_sclip:
-						stds = np.nanstd(frand['%d' % nr], 0)
-						high_sigma = np.abs(frand['%d' % nr]) > nsigma * stds
-						frand['%d' % nr][high_sigma] = np.nan
-					#frand['%d' % nr] = sclipping(np.array(frand['%d' % nr]), nsig, mask=bad)
-					fr_mean = np.nanmean(frand['%d' % nr], 0)
-					if ptype=='snr': zlr, ylr, xlr = fr_mean.shape
-					else: ylr, xlr = fr_mean.shape
-
-			zlm, ylm, xlm = fmuse.shape
-
-		if ptype == 'snr':
-			fout = open('UVB.dat', 'w')
-			fout.write('#r0 r1 zw zoff SB SB_std SB_rand fLLS Gamma Gamma_std\n')
-			rpix_eagle = np.array(rads) / asec2pix_eagle
-			y, x = np.ogrid[0: yle, 0: xle]
-			ce = (x - xle / 2.) ** 2 + (y - yle / 2.) ** 2
-
-			ym, xm = np.ogrid[0: ylm, 0: xlm]
-			cm = (xm - xlm / 2.) ** 2 + (ym - ylm / 2.) ** 2
-			if do_rand:
-				yr, xr = np.ogrid[0: ylr, 0: xlr]
-				cr = (xr - xlr / 2.) ** 2 + (yr - ylr / 2.) ** 2
-
-			r0 = np.arange(8, 15, 1)
-			r1 = np.arange(12, 28, 1)
-			zoffs = [0, -1, -2, -3, 1]
-			zws = [0, 1, 2]
-			g = {}
-			gstd = {}
-			sbstd = {}
-			sb = {}
-			sbrand = {}
-			_nm = fall.shape[0]
-			for i in r0:
-				for j in r1:
-					if i!=j:
-						rm0 = i / asec2pix_muse
-						rm1 = j / asec2pix_muse
-						re0 = i / asec2pix_eagle
-						re1 = j / asec2pix_eagle
-						print 'Between %.1f and %.1f arcsec' % (i, j)
-						inside_muse = (cm >= rm0 ** 2) & (cm < rm1 ** 2)
-						nin = np.sum(inside_muse)
-						for _zoff in zoffs:
-							for _zw in zws:
-								print 'zw %d zoff %d' % (_zw*2+1, _zoff)
-								_fmuse = fmuse[zlm/2-_zw+_zoff: zlm/2+_zw+_zoff+1, inside_muse]
-								fin = np.nanmean(np.nansum(_fmuse, 0))
-								inside_rand = (cr >= rm0 ** 2) & (cr < rm1 ** 2)
-								fr = fr_mean[zlr/2-_zw: zlr/2+_zw+1, inside_rand]
-								fr = np.nanmean(np.nansum(fr, 0))
-								fstd = []
-								for nr in range(nrand):
-									#_n = frand['%d' % nr].shape[0]
-									#corr = np.sqrt(_n)/np.sqrt(_nm)
-									fr2 = frand['%d' % nr][:, zlr/2-_zw: zlr/2+_zw+1, inside_rand]
-									fstd.append(np.nanmean(np.nansum(fr2, 1)))
-								fstd = np.nanstd(fstd)
-
-								inside_eagle = (ce >= re0 ** 2) & (ce < re1 ** 2)
-								fe = np.nanmean(np.nansum(feagle[zle/2-_zw: zle/2+_zw+1, inside_eagle],0))
-								fy = fin*flux2sb/fe
-								sb2gamma = .519 # for z=3.5 expected SB is 1.31e-20 for a gamma .684e-12
-								gamma = fy*sb2gamma
-								gamma_std = fstd * flux2sb / fe * sb2gamma
-								fout.write('%.3f %.3f %d %d %.3f %.3f %.3f %.3f %.3f %.3f\n' %
-										   (i, j, _zw, _zoff, fin*flux2sb, fstd*flux2sb, fr*flux2sb, fe, gamma, gamma_std))
-								if 0:#fin > 2*fstd+fr:
-									sb['%.1f-%.1f_%d_%d' % (i, j, _zw, _zoff)] = fin*flux2sb
-									sbstd['%.1f-%.1f_%d_%d' % (i, j, _zw, _zoff)] = fstd*flux2sb
-									sbrand['%.1f-%.1f_%d_%d' % (i, j, _zw, _zoff)] = fr*flux2sb
-								print 'SB %.3f, random %.3f. 2sigma noise %.3f. fLLS %.3f. SB EAGLE HM12 %.3f. SBUVB %.3f. Gamma %.3f std %.3f' % \
-										  (fin*flux2sb, fr*flux2sb, 2*fstd*flux2sb, fe, fe*SB, fy, gamma, gamma_std)
-			fout.close()
-			if 0:
-				_g = np.array(g.values())
-				_gstd = np.array(gstd.values())
-				_k = np.array(g.keys())
-				gmin = np.amin(_g)
-				gstdmin = np.amin(_gstd)
-				min1 = _g==gmin
-				min2 = _gstd == gstdmin
-				print 'Min value gamma',_k[min1], _g[min1], _gstd[min1]
-				print 'Min value gamma std', _k[min2], _g[min2], _gstd[min2]
-
-
-
-			if 1:
-				# Selected values
-				_r0, _r1, _zoff, _zw = [8, 19, -1, 2]
-				rm0 = _r0 / asec2pix_muse
-				rm1 = _r1 / asec2pix_muse
-				re0 = _r0 / asec2pix_eagle
-				re1 = _r1 / asec2pix_eagle
-				inside_rand = (cr >= rm0 ** 2) & (cr < rm1 ** 2)
-				inside_muse = (cm >= rm0 ** 2) & (cm < rm1 ** 2)
-				inside_eagle = (ce >= re0 ** 2) & (ce < re1 ** 2)
-				_fmuse = fmuse[zlm / 2 - _zw + _zoff: zlm / 2 + _zw + _zoff + 1, inside_muse]
-				#zrange = [zlm/2, zlm/2+zoff, zlm/2-zoff, zlm/2+20]
-				zrange = np.arange(-10, 11)
-				_f = []
-				_fr = []
-				_std = []
-				_fe = []
-				for zz in zrange:
-					fcool = fit[zlm/2+zz-_zw: zlm/2+zz+_zw+1, inside_muse]
-					_f.append(np.nanmean(np.nansum(fcool, 0)))
-					inside_rand = (cr >= rm0 ** 2) & (cr < rm1 ** 2)
-					fr = fr_mean[zlr/2+zz-_zw: zlr/2+zz+_zw+1, inside_rand]
-					fr = np.nanmean(fr)
-					fstd = []
-					for nr in range(nrand):
-						_n = frand['%d' % nr].shape[0]
-						corr = np.sqrt(_n) / np.sqrt(_nm)
-						fstd.append(corr * np.nanmean(frand['%d' % nr][:, inside_rand]))
-					_std.append(np.nanstd(fstd))
-
-					inside_eagle = (ce >= re0 ** 2) & (ce < re1 ** 2)
-					_fe.append(np.nanmean(feagle[0, inside_eagle]))
-
+		fdat = 'muse-vs-eagle.dat'
+		if os.path.isfile(fdat):
+			_r0, _r1, _fin, _fe, _fstd, _fe_std, _fmean_out, _fstd_out = np.loadtxt(fdat)
 		else:
-			#rads = [[0, .2], [.2, .4], [.4, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 12], [12, 16], [16, 20], [20, 24], [24, 30], [40, 50]]#,	[50, 60], [60, 70], [70, 80], [80, 90], [90, 100]]
-			rads = [[0, 2], [2, 4], [4, 6], [6, 10], [10, 16], [16, 24], [24, 30],#, [40, 50], [50, 60]]#,
-					[60, 70], [70, 80], [80, 90], [90, 100]]
-			if do_snr: rads = [[6, 12], [6, 14], [6, 16], [6, 20], [6, 30], [8, 14], [10, 20], [8, 20]]
-			#rads = [[0, 1], [4, 12], [8, 12], [8, 16], [10, 20], [14, 20], [18, 30]]
-			if do_spectra: rads = [[0, 2], [2, 4], [4, 8], [8, 12], [12, 20]]
+			_fin = None
+		if overwrite: _fin = None
+		# _fin = None
+		feagle = [getdata('../../EAGLE/simplestacks/snap%d.%s.fits' % (s, type)) for s in [10, 11, 12]]
+		feagle = np.nanmean(feagle, 0)
+		zl, yl, xl = feagle.shape
+		feagle_out = (feagle[0, :, :] + feagle[-1, :, :]) / 2.
+		feagle = feagle[zl / 2, :, :]
 
-			if do_muse: rpix_muse = np.array(rads) / asec2pix_muse
-			nrad = len(rads)
+		# feagle = np.nansum(feagle[zl / 2 - zw:zl / 2 + zw + 1, :, :], 0)
+		# fnhi = sb2nhi(feagle[zl / 2 - zwe:zl / 2 + zwe + 1, :, :])
+		# fnhi[fnhi<15] = 0
+		# fnhi = np.power(10, fnhi)
+		# fnhisum = np.log10(np.nansum(fnhi, 0))
+		# feagle = nhi2sb(np.log10(np.nansum(fnhi, 0)))
 
-			if do_eagle:
-				rpix_eagle = np.array(rads) / asec2pix_eagle
-				y, x = np.ogrid[0: yle, 0: xle]
-				ce = (x - xle / 2.) ** 2 + (y - yle / 2.) ** 2
-				feh = {}
-				fel = {}
-				for p in pnames:
-					feh[p] = [[]]*nrad
-					fel[p] = [[]]*nrad
 
-			ym, xm = np.ogrid[0: ylm, 0: xlm]
-			cm = (xm - xlm / 2.) ** 2 + (ym - ylm / 2.) ** 2
-			if do_rand:
-				yr, xr = np.ogrid[0: ylr, 0: xlr]
-				cr = (xr - xlr / 2.) ** 2 + (yr - ylr / 2.) ** 2
-			fconn = []
-			fstds = []
-			cmap = get_cmap('tab10')
-			color = 0
+		asec2pix_eagle = .1836  # average btw snapshots
+		asec2pix_muse = .2  # muse
+		fall = []
+		fouts = []
+		n5d = []
+		try:
+			glob.os.makedirs('../../all/simplestacks/')
+		except:
+			pass
 
-			_fin = []
-			_fe = []
-			_fstd = []
-			_fe_std = []
-			_fy = []
-			_fr = []
-
-			for k in range(nrad):
+		if _fin is None:
+			for fitcat in ['UDF', 'HDFS']:
+				cat = getdata('../../%s/cats/laes.fits' % fitcat, 1)
+				pairs = getdata('../../%s/cats/lae_pairs.fits' % fitcat, 1)
+				ids = cat['ID']
+				zs = cat['redshift']
+				sconf = cat['sconf']
+				cool = (sconf >= 2) & (zs < 4)
+				d = pairs['com_dist']
+				id1 = pairs['id1']
+				for i in ids[cool]:
+					ffits = flaes + '/%s/LAEs/%d.fits' % (fitcat, i)
+					if os.path.isfile(ffits):
+						fit = getdata(ffits)
+						zlm, ylm, xlm = fit.shape
+						fitin = fit[zlm / 2 - zw:zlm / 2 + zw + 1, :, :]
+						fitout = fit[:2 * zw + 1, :, :]
+						fall.append(np.nanmean(fitin, 0) * (2 * zw + 1))
+						fouts.append(np.nanmean(fitout, 0))
+						n5d.append(np.sort(d[id1 == i])[5])
+			fall = np.array(fall)
+			fouts = np.array(fouts)
+			fall = sclipping(fall, 3, 0)[0]
+			fouts = sclipping(fouts, 3, 0)[0]
+			fmuse = np.nanmean(fall, 0)
+			fout = np.nanmean(fouts, 0)
+		# hdu = PrimaryHDU()
+		# hdu.data = fmuse
+		# hdu.writeto('../../all/simplestacks/stack.fits', clobber=True)
+		# fmuse = np.nansum(fmuse[zl/2-zw:zl/2+zw+1, :, :], 0)
+		rads = [[0, 2], [2, 4], [4, 6], [6, 8], [8, 12], [12, 16], [16, 20], [20, 24], [24, 30]]
+		# rads = [[4, 6], [4, 8], [4, 12], [6, 14], [8, 16], [10, 20], [14, 20], [18, 30]]
+		rpix_muse = np.array(rads) / asec2pix_muse
+		rpix_eagle = np.array(rads) / asec2pix_eagle
+		y, x = np.ogrid[0: yl, 0: xl]
+		c = (x - xl / 2.) ** 2 + (y - yl / 2.) ** 2
+		fconn = []
+		fstds = []
+		fig, ax = plt.subplots(figsize=(7, 4))
+		cmap = get_cmap('tab10')
+		color = 0
+		all = []
+		if _fin is None:
+			for k in range(len(rads)):
 				rm = rpix_muse[k]
-				if do_eagle: re = rpix_eagle[k]
+				re = rpix_eagle[k]
 				r = rads[k]
 				print 'Between %.1f and %.1f arcsec' % (r[0], r[1])
+				if _fin is None:
+					inside_muse = (c > rm[0] ** 2) & (c < rm[1] ** 2)
+					inside_eagle = (c > re[0] ** 2) & (c < re[1] ** 2)
+					nin = np.sum(inside_muse)
+					# print 'Number of pixels', nin
+					fin = np.nanmean(fmuse[inside_muse])
 
-				inside_muse = (cm >= rm[0] ** 2) & (cm < rm[1] ** 2)
-				nin = np.sum(inside_muse)
-				# print 'Number of pixels', nin
-				_fmuse = fmuse[:, inside_muse]
-				fin = np.nanmean(_fmuse, 1)
-				if do_rand:
-					inside_rand = (cr >= rm[0] ** 2) & (cr < rm[1] ** 2)
-					fr = fr_mean[inside_rand]
-					fr = np.nanmean(fr)
-					fstd = []
-					for nr in range(nrand): fstd.append(np.nanmean(frand['%d' % nr][:, inside_rand]))
-					fstd = np.nanstd(fstd)
-				fe, fe_std, fy = None, None, None
+					if 0:
+						# jackniffe
+						fjack = []
+						fout = []
+						fstds = []
+						nall = len(fall)
+						# for i in range(nin):
+						#	fjack.append(np.nanmean(np.delete(fmuse[inside_muse], i)))
+						for i in range(nall):
+							fstds.append(np.nanstd(fall[i, inside_muse]))
+							_f = np.delete(fall, i, 0)
+							_fo = np.delete(fouts, i, 0)
+							fjack.append(np.nanmean(_f[:, inside_muse]))
+							fout.append(np.nanmean(_fo[:, inside_muse]))
+						fstd = np.nanstd(fjack)
+						fmean_out = np.nanmean(fout)
+						fstd_out = np.nanstd(fout)
+						fstd_stack = np.nanstd(fmuse[inside_muse])
+						fstd_ind = np.nanmean(fstds)
 
-				if do_eagle:
-					inside_eagle = (ce >= re[0] ** 2) & (ce < re[1] ** 2)
-					tfe = feagle[:, inside_eagle]
-					fe = np.nanmean(tfe, 1)
+						print 'individual std %f, overall %f, individual/sqrt(nall) %f' % (
+						fstd_ind, fstd_stack, fstd_ind / np.sqrt(nall))
+					else:
+						nall = len(fall)
+						fstds = [np.nanstd(fall[i, inside_muse]) for i in range(nall)]
+						fstds_out = [np.nanstd(fouts[i, inside_muse]) for i in range(nall)]
+						fix = np.nanstd(fmuse[inside_muse]) * np.sqrt(nall) / np.nanmean(fstds)
+						fix_out = np.nanstd(fout[inside_muse]) * np.sqrt(nall) / np.nanmean(fstds_out)
+						# print np.nanstd(fmuse[inside_muse]), np.nanmean(fstds)/np.sqrt(nall), fix, fix_out
+						fstd = np.nanstd(fmuse[inside_muse]) * fix / np.sqrt(nin)
+						fmean_out = np.nanmean(fout[inside_muse])
+						fstd_out = np.nanstd(fout[inside_muse]) * fix_out / np.sqrt(nin)
+					fe = np.nanmean(feagle[inside_eagle])
+					fe_out = np.nanmean(feagle_out[inside_eagle])
 					# fjack = []
 					# for i in range(len(feagles)): fjack.append(np.nanmean(np.delete(feagles, i, 0)[:, inside_eagle]))
 					# del feagles
-					fe_std = np.nanstd(tfe, 1)
-					for p in pnames:
-						feh[p][k] = np.nanmean(fhigh[p][:, inside_eagle], 1)
-						fel[p][k] = np.nanmean(flow[p][:, inside_eagle], 1)
-
-				if do_eagle and do_muse and do_rand:
-					fy = (fin[0]-fr)*flux2sb/fe[0]
-					gamma_std = fstd*flux2sb/fe[0]*1.9/4.27
-					print 'SB %.3f, random %.3f. 2sigma noise %.3f. fLLS %.3f. SB EAGLE HM12 %.3f. SBUVB %.3f. Gamma %.3f std %.3f' % \
-						  (fy*fe[0], fr*flux2sb, 2*fstd*flux2sb, fe[0], fe[0]*SB, fy, 1.9*fy/4.27, gamma_std)
-					if color == 0:
-						lbs = ['Measured', 'Expected', 'Upper limit']
-					else:
-						lbs = [None, None, None]
-				_fin.append(fin)
-				_fe.append(fe)
-				_fstd.append(fstd)
-				_fe_std.append(fe_std)
-				_fy.append(fy)
-				_fr.append(fr)
-			_fin = np.array(_fin)
-			_fe = np.array(_fe)
-			_fstd = np.array(_fstd)
-			_fe_std = np.array(_fe_std)
-			_fy = np.array(_fy)
-			_fr = np.array(_fr)
-
-			if do_spectra:
-				nrad = len(rads)
-				nr = range(nrad)
-
-				zmin, zmax = 0, zlm + 1#zlm/2-10, zlm/2+11
-				v = 2.99792458e5 * (np.arange(zlm)*zlm0/zlm-zlm0/2) * 1.25 / 1215.67 / 4.5
-				for i in nr:
-					fig, ax = plt.subplots(figsize=(10, 4))
-					r = rads[i]
-
-					f = _fin[i][zmin: zmax]# - _fr[i]
-					fstd = _fstd[i]
-					ax.plot(v[zmin: zmax], f*flux2sb)
-					#ax.plot(v[zmin: zmax], [2*fstd*flux2sb]*len(f), label=r'2$\sigma$ noise level')
-					ax.plot(v[zmin: zmax], [0]*len(f), color='gray')
-					#ax.scatter([0], [1], color='red')
-					plt.xlabel('v[km/s]')
-					plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
-					plt.grid()
-
-					ax2 = ax.twinx()
-					ax2.plot(v[zmin: zmax], f/fstd, alpha=0)
-					plt.ylabel(r'SNR')
-
-					plt.savefig('../../Figures/SB_spectra%s_r%d-%d_zw%d%s%s%s.png' % (scat, r[0], r[1], zw, '_mask'*do_mask, sspec, extraname))
-					# plt.show()
-					plt.close()
-
-				fig, ax = plt.subplots(figsize=(10, 4))
-				ax.plot(v[zmin: zmax], [0] * zlm, color='gray')
-				plt.ylim(-zw*.35, zw*1.6)
-				plt.xlabel('v[km/s]')
-				plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
-				for i in nr[1:]:
-					r = rads[i]
-					f = _fin[i][zmin: zmax] - _fr[i]
-					fstd = _fstd[i]
-					ax.plot(v[zmin: zmax], f*flux2sb, label='%d < r < %d arcsec' % (r[0], r[1]))
-				plt.legend()
-				plt.grid()
-				plt.savefig('../../Figures/SB_spectra%s_zw%d%s%s%s.png' % (scat, zw, '_mask'*do_mask, sspec, extraname))
-				plt.rcParams["figure.figsize"] = (8, 4)
-				plt.xlim(-1200, 1200)
-				plt.savefig('../../Figures/SB_spectra%s_zw%d%s%s%s_2.png' % (scat, zw, '_mask' * do_mask, sspec, extraname))
-				# plt.show()
-				plt.close()
-			import itertools
-
-			marker = itertools.cycle(('*', 'X', '^', 'h', 'd', 'o', 'v'))
-			scale = 1  # e-20
-			offset = 0
-			rm = np.mean(rads, 1)
-			if do_mplot:
-				fig, ax = plt.subplots(figsize=(7, 4))
-
-				for i in range(len(zrange))[:3]:
-					_y = (_fin[:, i]) * flux2sb * scale + offset
-					vmin = 2.99792458e5 * (zrange[i]-zlm0/2-zw0) * 1.25 / 1215.67 / 4.5
-					vmax = 2.99792458e5 * (zrange[i]-zlm0/2+zw0) * 1.25 / 1215.67 / 4.5
-					ax.plot(rm, _y, c=cmap(i))
-					ax.scatter(rm, _y, c=cmap(i), marker=marker.next(), s=30, label=r'$%.f<v<%.f$ km/s' % (vmin, vmax))
-
-				_y = (2*_fstd+_fr)*flux2sb
-				_ymin = list(_fstd - 10)
-				ax.plot(rm, _y, c='black')
-				ax.scatter(rm, _y, c='black', marker='.', s=15, label=r'2$\sigma$ noise level')
-				plt.fill_between(rm, _ymin, list(_y), facecolor='black', alpha=0.3, lw=0, edgecolor='none')
-
-				plt.xlim(5, 27)
-				plt.ylim(-.2, 2)
-				plt.xlabel('distance [arcsec]')
-				plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
-				plt.legend()
-				plt.savefig('../../Figures/SB_MUSE_layers%s_zw%d%s%s.pdf' % (scat, zw, '_mask'*do_mask, extraname), ext='pdf', pdi=200)
-				plt.close()
-
-			if do_eplot:
-				fig, ax = plt.subplots(figsize=(7, 4))
-				#a = [list(f) for f in _fe]
-				#_fe = np.array(a).T
-				#_fe = np.nanmean([_fe, _fe[::-1]], 0)
-				_y = _fe*scale
-				#a = [list(f) for f in _fe_std]
-				#_fe_std = np.array(a).T
-				#_fe_std = np.nanmean([_fe_std, _fe_std[::-1]], 0)
-				_ystdmin = (_fe[:, 0]-2*_fe_std[:, 0])*scale
-				_ystdmax = (_fe[:, 0]+2*_fe_std[:, 0])*scale
-
-				for i in range(len(zrange_e)):
-					v0 = 69.3*np.sqrt((1+redshifts['11'])**3*(1-0.714)+0.714)*coml/float(1+redshifts['11'])/zlens['11']
-					v = v0*(zrange_e[i]-zle0/2)
-					#if zrange_e[i] == zle0/2:
-					#	plt.fill_between(rm, _ystdmin[i], _ystdmax[i], facecolor=cmap(i), alpha=0.3, lw=0, edgecolor='none')
-
-					ax.scatter(rm, _y[:, i], c=cmap(i), marker=marker.next(), s=30, label=r'$\Delta$v=%.0f km/s' % v)
-					ax.plot(rm, _y[:, i], c=cmap(i))
-				plt.semilogy()
-				plt.ylim(.3e-2, 1)
-				#plt.yticks()
-				plt.xlim(1, 95)
-				#plt.xticks([.1, .3, 1, 3, 10, 30, 80])
-				plt.xlabel('distance [arcsec]')
-				plt.legend()
-				plt.semilogy()
-				plt.ylabel(r'$\mathrm{f_{LLS}}$')
-				yti = np.array([1e-2, 1e-1, 1])
-				plt.yticks(yti, [.01, .1, 1])
-
-				#ax2 = ax.twinx()
-				#plt.semilogy()
-				#plt.ylim(.3e-2, 1)
-				#plt.ylabel('dndz')
-				#plt.yticks(yti, [2, 20, 200])
-
-				# leg = ax.get_legend()
-				# for ls in leg.legendHandles: ls.set_color('black')
-				plt.savefig('../../Figures/SB_EAGLE_layers_zw%d%s.pdf' % (zw, '_masked'*do_emask), ext='pdf', pdi=200)
-				#plt.show()
-				plt.close()
-
-
-				for p in pnames:
-					fig, ax = plt.subplots(figsize=(7, 4))
-					a = [list(f) for f in feh[p]]
-					_feh = np.array(a).T
-					a = [list(f) for f in fel[p]]
-					_fel = np.array(a).T
-
-					ax.scatter(rm, _feh[zle0/2], c='red', marker=marker.next(), s=30, label=p+' high')
-					ax.plot(rm, _feh[zle0/2], c='red')
-					ax.scatter(rm, _fel[zle0/2], c='blue', marker=marker.next(), s=30, label=p+' low')
-					ax.plot(rm, _fel[zle0/2], c='blue')
-					plt.semilogy()
-					plt.ylim(.2e-2, 1)
-					# plt.yticks()
-					plt.xlim(1, 95)
-					plt.xlabel('distance [arcsec]')
-					plt.legend()
-					plt.semilogy()
-					plt.ylabel(r'$\mathrm{f_{LLS}}$')
-					yti = np.array([1e-2, 1e-1, 1])
-					plt.yticks(yti, [.01, .1, 1])
-
-					# leg = ax.get_legend()
-					# for ls in leg.legendHandles: ls.set_color('black')
-					plt.savefig('../../Figures/SB_EAGLE_layers_zw%d.%s.pdf' % (zw, p), ext='pdf', pdi=200)
-					# plt.show()
-					plt.close()
+					fe_std = np.nanstd(feagle[inside_eagle]) / np.sqrt(nin)
+				else:
+					fin = _fin[k]
+					fe = _fe[k]
+					fstd = _fstd[k]
+					fe_std = _fe_std[k]
+					fmean_out = _fmean_out[k]
+					fstd_out = _fstd_out[k]
+				tot_std = np.sqrt((fe_std / fe) ** 2 + (fstd / fin) ** 2)
+				fy = fin * conv / fe * (1 + 2 * tot_std)
+				print 'SB %.3f std %.3f SBout %.3f stdout %.3f. fconn %.3f out %.3f. SB EAGLE %.3f. 2sigma SB uplim %.3f' % \
+					  (fin * conv, fstd * conv, fmean_out * conv, fstd_out * conv, fe, fe_out, fe * SB, fy)
+				rm = (r[0] + r[1]) / 2
+				if color == 0:
+					lbs = ['Measured', 'Expected', 'Upper limit']
+				else:
+					lbs = [None, None, None]
+				# ax.scatter(rm, fin*conv, c=cmap(color), marker='o', label=lbs[0])
+				# ax.errorbar(rm, fin*conv, xerr=(r[1]-r[0])/2., yerr=2*fstd*conv, c=cmap(color), capsize=4, alpha=.4)
+				# ax.scatter(rm, fe*SB, c=cmap(color), marker='*', label=lbs[1])
+				# ax.errorbar(rm, fe*SB, yerr=2*fe_std*SB, c=cmap(color), capsize=4, alpha=.4)
+				# ax.errorbar(rm, fe * SB, yerr=2 * fe_std * SB, c='red', capsize=4, alpha=.4)
+				# ax.errorbar(rm, fy, xerr=.3, yerr=.2*fy, uplims=fy, c=cmap(color), capsize=None)
+				# ax.errorbar(rm, fy, xerr=.3, yerr=.04, uplims=fy, c=cmap(color), capsize=None)
+				# ax.set_yticklabels([.03, .05, .1, .3, .5, 1, 3])
+				color += 1
+				all.append([r[0], r[1], fin, fe, fstd, fe_std, fmean_out, fstd_out, fe_out])
+				fconn.append(fin)
+				fstds.append(fstd)
+		if _fin is None:
+			all = np.array(all).T
+			_r0, _r1, _fin, _fe, _fstd, _fe_std, _fmean_out, _fstd_out, _fe_out = all
+			np.savetxt(fdat, all)
+		rm = (_r0 + _r1) / 2
+		ax.scatter(rm, _fin * conv, c='blue', marker='o', label=r'MUSE')
+		ax.plot(rm, _fin * conv, c='blue', marker='o')
+		plt.fill_between(rm, (_fin - 2 * _fstd) * conv, (_fin + 2 * _fstd) * conv, facecolor='blue', alpha=0.3, lw=0,
+						 edgecolor='none')
+		# ax.errorbar(rm, _fin*conv, xerr=(_r1-_r0)/2., c='grey', capsize=4, alpha=.4)
+		ax.scatter(rm, _fe * SB, c='red', marker='*', label=r'HM12 EAGLE')
+		ax.plot(rm, _fe * SB, c='red')
+		ax.plot(rm, _fmean_out*SB, c='pink')
+		ax.scatter(rm, _fmean_out*SB, c='pink', marker='.', label=r'MUSE outside')
+		ax.plot(rm, _fe_out*SB, c='gray')
+		ax.scatter(rm, _fe_out*SB, c='gray', marker='.', label=r'HM12 EAGLE outside')
+		plt.fill_between(rm, (_fe - 2 * _fe_std) * SB, (_fe + 2 * _fe_std) * SB, facecolor='red', alpha=0.3, lw=0,
+						 edgecolor='none')
+		plt.semilogy()
+		# plt.ylim(0, 1)
+		plt.xlabel('distance [arcsec]')
+		plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
+		plt.legend()
+		# leg = ax.get_legend()
+		# for ls in leg.legendHandles: ls.set_color('black')
+		plt.savefig('../../Figures/SB_upper-limits.pdf', ext='pdf', pdi=200)
+		# plt.show()
+		plt.close()
 
 if superstack:
 
@@ -2394,6 +1981,152 @@ if superstack:
 		plt.legend()
 		plt.savefig('../../EAGLE/plots/SB-vs-d.%s' % ext, dpi=dpi, format=ext)
 		plt.close()
+
+if 0:
+	fout = '../../Figures/'
+	highq = True
+	if highq:
+		ext = 'pdf'
+	else:
+		ext = 'png'
+	if 1:
+		f = '../../EAGLE/stacks/d0-2_pd16-2000_nw0-1000/'
+		fits = getdata(f + 'stack.fits')
+		zl, yl, xl = fits.shape
+		ff = np.mean(fits[zl / 2 - 1: zl / 2 + 1, :, :], 0)
+		hdu = PrimaryHDU()
+		hdu.data = ff
+
+		hdu.writeto(f + 'stack.IM.2.fits', clobber=True)
+		astroim(f + 'stack.IM.2.fits', smooth=True, saveim=True, show=False,
+				cbfrac=.08, pad=.006, dfig=(8, 8), contours=True,
+				x0=0, y0=0, imout=fout + 'stack-d2-snap11.%s' % ext, std=None, scale=False, regcolor=None,
+				scb_label=r'$\rm{f_{conn}}$', xticks=[-16, -12, -8, -4, 0, 4, 8, 12, 16],
+				yticks=[-12, -8, -4, 0, 4, 8, 12],
+				title='', vmin=0, vmax=.25, gray=False, sb=False, cmap='rainbow',
+				xmin=-25, xmax=25, ymin=-20, ymax=20, pcolor='white', highq=highq, dpi=200, nbins=5)
+
+	f = '../../all/stacks/d0-20_pd16-80_z2.9-4.0_l1-2000_n8-100/'
+	astroim(f + 'stack.IM.fits', smooth=True, saveim=True, show=False,
+			cbfrac=.08, pad=.006, dfig=(8, 8), contours=True,
+			x0=0, y0=0, imout=fout + 'stack-muse-nmin8.%s' % ext, std=2, scale=False, regcolor=None,
+			scb_label=r'$\rm{SB\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}]}',
+			xticks=[-16, -12, -8, -4, 0, 4, 8, 12, 16], yticks=[-12, -8, -4, 0, 4, 8, 12],
+			title='', vmin=-0.3, vmax=2, gray=False, cmap='rainbow', sb=True,
+			xmin=-25, xmax=25, ymin=-20, ymax=20, pcolor='white', highq=highq, dpi=200, nbins=5)
+
+if radprof:
+	def sclipping(fits, nsigma, dim=None, mask=None):
+		# print 'Asign nan to values > nsigma in a fits array'
+		if dim is None:
+			stds = np.nanstd(fits[:, mask])
+		else:
+			stds = np.nanstd(fits[:, mask], dim)
+		high_sigma = np.abs(fits) > nsigma * stds
+		fits[high_sigma] = np.nan
+		return fits, stds
+
+
+	zw = 1
+	yw = 2
+	zoff = 0
+	dw = 1
+	c = (2 * zw + 1) * 7.8125
+	fin = '/net/galaxy-data/export/galaxydata/gallegos/'
+	folder = '../../EAGLE/stacks/snap11_x_galstack/'
+	fstacks = [getdata(f) for f in glob.glob('%s/EAGLE/gals/[!IM]*.fits' % fin)]
+
+	folder2 = '../../all/stacks/laestack/'
+	fits = [getdata(f) for f in glob.glob('%s/UDF/LAEs/lae[!IM]*.fits' % fin)]
+	fits, stds = sclipping(fits, 3, 0)
+
+	stack = getdata(folder + 'stack.fits')
+	stack2 = getdata(folder2 + 'stack.fits')
+	frs = []
+	for i in range(200):
+		hdur = getdata(folder2 + 'randoms/random_stack.%d.fits' % i)
+		frs.append(hdur)
+	zl, yl, xl = stack.shape
+	zl2, yl2, xl2 = stack2.shape
+	print xl, xl2, yl, yl2, zl, zl2
+	xmin = yl / 2
+	t = np.concatenate([np.arange(xmin, xmin + 12, 1), [xmin + 13, xmin + 18, xmin + 27, xmin + 41]]).astype('int')
+	zi = zl / 2 - zw / 2
+	zf = zl / 2 + zw / 2 + 1
+	zi2 = zl2 / 2 - zw / 2 + zoff
+	zf2 = zl2 / 2 + zw / 2 + 1 + zoff
+	y, x = np.ogrid[-yl / 2 + 1: yl / 2 + 1, -xl / 2 + 1: xl / 2 + 1]
+	y2, x2 = np.ogrid[-yl2 / 2 + 1: yl2 / 2 + 1, -xl2 / 2 + 1: xl2 / 2 + 1]
+	for i in range(len(t) - 1):
+		sb.append((t[i] + t[i + 1]) * .5)
+		cool = (x ** 2 + y ** 2 >= t[i] ** 2) & (x ** 2 + y ** 2 < t[i + 1] ** 2)
+		cool2 = (x2 ** 2 + y2 ** 2 >= t[i] ** 2) & (x2 ** 2 + y2 ** 2 < t[i + 1] ** 2)
+		sb.append(np.nanmean(stack[zi:zf, cool]))
+		sb.append(np.nanmean(stack2[zi2:zf2, cool2]) * c)
+		sb.append(np.nanstd([np.nanmean(ff[zi:zf, cool2]) * c for ff in frs]))
+	lx = len(t) - 1
+	# ld = len(dir)*3 + 1
+	ld = 5
+	sb = np.array(sb).reshape((lx, ld))
+	np.savetxt('../../EAGLE/plots/radprof.txt', sb,
+			   header='dpix sim muse std')
+
+	x1 = 2
+	x2 = 9
+	y1 = 0.05
+	y2 = 12
+	hm = False
+	hmSB = 1.14
+	y1b = -4
+	y2b = 6
+	fsize = 30
+	width = 4
+	sigmas = 2
+
+	plt.figure(figsize=(20, 12))
+	plt.loglog()
+	ax = plt.axes()
+	cax = plt.gca()
+	plt.xlim([x1, x2])
+	xrange = np.arange(2, 9, 2)
+	plt.xticks(xrange, xrange, fontsize=fsize)
+	plt.xlabel(r"$\theta$ [arcsec]", fontsize=fsize)
+	plt.ylabel(r'$\rm{SB}\,\rm{[}10^{-20}\rm{erg\,s^{-1}cm^{-2}arcsec^{-2}]}$', fontsize=fsize + 2)
+	yticks = [0, 2, 4, 6, 8, 10]
+	plt.yticks(yticks, yticks, fontsize=fsize)
+	plt.minorticks_off()
+	plt.twiny(ax=None)
+	plt.loglog()
+	plt.xlim([x1, x2])
+	plt.xlabel(r'$r_p\,\rm{[pkpc]}$', fontsize=fsize)
+	kpc = np.arange(15, 90, 15) / 7.47
+	plt.xticks(kpc, (kpc * 7.47).astype('int'), fontsize=fsize)
+	plt.ylim([y1, y2])
+	plt.plot((2, x2), (0, 0), '--', label='', color="gray", linewidth=width + 1)
+	if hm: plt.plot((x1, x2), (hmSB, hmSB), '--', label=r"LLS Fluorescence from HM12", color="green",
+					linewidth=width + 1)
+
+	x = (t[:-1] + (t[1:] - t[:-1]) / 2. - yl / 2) * .4
+
+	# plt.plot(x, sb[:, 2], label='MUSE oriented', lw=width, color='black')
+	# plt.scatter(x, sb[:, 2], s=width * 10, color='black')
+	sb = np.array(sb)
+	sb[sb < 0] = 0.001
+	plt.plot(x, sb[:, 3], label='MUSE', lw=width, color='dodgerblue')
+	plt.scatter(x, sb[:, 3], s=width * 10, color='dodgerblue')
+	a = sb[:, 3] - sigmas * sb[:, 4]
+	a[a < 0] = 0.001
+	plt.fill_between(x, a, sb[:, 3] + sigmas * sb[:, 4], facecolor='dodgerblue', alpha=0.3, lw=0, edgecolor='none')
+
+	sbuvmean = 0.8
+	sbuvup = 1.2
+	sbuvdown = 0.6
+	plt.plot(x, sb[:, 1] * sbuvmean, label='EAGLE+HM12', lw=width, color='red')
+	plt.scatter(x, sb[:, 1] * sbuvmean, s=width * 10, color='red')
+	plt.fill_between(x, sb[:, 1] * sbuvdown, sb[:, 1] * sbuvup, facecolor='red', alpha=0.3, lw=0, edgecolor='none')
+	plt.minorticks_off()
+	plt.legend(fontsize=fsize, loc='best')  # (3.5,2))
+	plt.savefig('../../analysis/muse-vs-eagle_radprof.png')
 
 if sbprof:
 	zw = 5

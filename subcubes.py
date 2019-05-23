@@ -1,14 +1,14 @@
 #!/usr/bin/env python
 __author__ = 'nefinia'
 
-from pyfits import getdata, PrimaryHDU, Column, ColDefs, BinTableHDU
 import h5py
-import numpy as np
-import os, subprocess, time
-from math import *
-from random import randrange, uniform, randint, random, choice
+import os
+import time
+from pyfits import getdata, PrimaryHDU
 from sys import argv
-import glob
+
+import numpy as np
+
 
 def rdarg(argv, key, type=None, default=None, listtype=int):
     # print argv, key, type, default
@@ -54,9 +54,10 @@ dorandom = rdarg(argv, 'random', bool, False)
 dovar = rdarg(argv, 'dovar', bool, False)
 extraname = rdarg(argv, 'extraname', str, '')
 fitcat = rdarg(argv, key='fitcat', type=str, default='HDFS')  # 'UDF
-folder = rdarg(argv, 'folder', str, '/net/astrogate/export/astrodata/gallegos/')  # '/scratch/gallegos/MUSE/'
+folder = rdarg(argv, 'folder', str, '/net/galaxy-data/export/galaxydata/gallegos/')  # '/scratch/gallegos/MUSE/'
 foldercat = rdarg(argv, 'foldercat', str, '../../')  # '/scratch/gallegos/MUSE/'
-folderout = rdarg(argv, 'folderout', str, '/net/astrogate/export/astrodata/gallegos/')
+folderout = rdarg(argv, 'folderout', str, '/net/galaxy-data/export/galaxydata/gallegos/')
+galpos = rdarg(argv, 'galpos', bool, False)
 i1 = rdarg(argv, 'id1', int, -1)
 i2 = rdarg(argv, 'id2', int, -1)
 idmin = rdarg(argv, 'idmin', int, 0)
@@ -97,16 +98,18 @@ ymax = rdarg(argv, 'ymax', int, 9e9)
 if not extraname: extraname = ''
 if noshear: extraname += '.noshear'
 if not laecentered: extraname += '.pair'
+
 smask = '.mask' * mask
 extra0 = ('snap%d_%s' % (snap, coord)) * (fitcat == 'EAGLE')
+if galpos: extraname = '.gals'+extraname
 
 now = time.time()
 byte2Mb = 9.5367431640625e-07
 
 def doim(outname, px, py, pz, data, xwn, ywn, zwn, xmore=0, binsize=2, sb=True):
-	f = np.zeros([2 * zwn + 1, 2 * ywn / binsize + 1, (2 * xwn + xmore) / binsize + 1])
-	_x = ((px + xwn) / binsize + .5).astype(int)
-	_y = ((py + ywn) / binsize + .5).astype(int)
+	f = np.zeros([2 * zwn + 1, 2 * ywn / binsize + 1, (2 * xwn + 1 + xmore) / binsize + 1])
+	_x = ((px + xwn + .5) / binsize).astype(int)
+	_y = ((py + ywn + .5) / binsize).astype(int)
 	_z = (pz + zwn + .5).astype(int)
 	for x, y, z, d in zip(_x, _y, _z, data): f[z, y, x] += d
 	# Correction for SB
@@ -128,7 +131,7 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 
 	for i1 in id1:
 
-		name = '%s/%s/gals/%s/%d%s.fits' % (folder, fitcat, extra0, i1, smask)
+		name = '%s/%s/gals/%s/%d%s%s.fits' % (folder, fitcat, extra0, i1, extraname, smask)
 		if not os.path.isfile(name):
 			print 'File %s does not exist' % name
 		else:
@@ -143,7 +146,7 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 			for x, y, z, i2 in zip(x2, y2, z2, id2):
 				print 'Pair %d-%d' % (i1, i2)
 				extra1 = ('SB_snap%d_%s' % (snap, coord)) * (fitcat == 'EAGLE')
-				fitsname = '%s/%s/pairs/%s/%d-%d%s.fits' % (folder, fitcat, extra1, i1, i2, smask)
+				fitsname = '%s/%s/pairs/%s/%d-%d%s%s.fits' % (folder, fitcat, extra1, i1, i2, extraname, smask)
 				if not os.path.isfile(fitsname) or imov:
 					if docalc:
 						Cn = np.array([z+zw, y+yw, x+xw])
@@ -183,9 +186,9 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 						pz = data['pz']
 						sb = data['SB']
 	
-					fitsname = '%s/%s/pairs/%s/%d-%d%s.fits' % (folder, fitcat, extra1, i1, i2, smask)
+					fitsname = '%s/%s/pairs/%s/%d-%d%s%s.fits' % (folder, fitcat, extra1, i1, i2, extraname, smask)
 					if not os.path.isfile(fitsname) or imov:
-						print 'Making fits!', 2*xwn+xmore, 2*ywn+1, 2*zwn+1
+						print 'Making fits!', 2*xwn+1+xmore, 2*ywn+1, 2*zwn+1
 						doim(fitsname, px, py, pz, sb, xwn, ywn, zwn, xmore)
 				else:
 					print 'Image aready exists.'
