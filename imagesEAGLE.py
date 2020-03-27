@@ -1,14 +1,22 @@
     #!/usr/bin/env python
 __author__ = 'nefinia'
-from pyfits import getdata, PrimaryHDU, getheader
-import h5py
+from pyfits import getdata, PrimaryHDU
+    import h5py
 import numpy as np
-import os, sys, time
-from math import sqrt, atan2
-from tools_sofi import cic, cubex, makejpeg, astroim, rdarg
+import os, time
+    from tools_sofi import cic, astroim, rdarg
 from sys import argv
+    import os
+    import time
+    from sys import argv
 
-binsize = rdarg(argv, 'binsize', int, 2)
+    import h5py
+    import numpy as np
+    from pyfits import getdata, PrimaryHDU
+
+    from tools_sofi import cic, astroim, rdarg
+
+    binsize = rdarg(argv, 'binsize', int, 2)
 coord = rdarg(argv, 'coord', str, 'x')
 cubesmooth = rdarg(argv, 'cubesmooth', bool, False)
 angle = rdarg(argv, 'angle', bool, False)

@@ -1,33 +1,36 @@
 #!/usr/bin/env python
 __author__ = 'gallegos'
 import glob
-import h5py
+# import h5py
 # import eagleSqlTools
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import os
-import scipy.interpolate as inter
 from math import sqrt
-from matplotlib.cm import get_cmap
-from matplotlib.colors import LinearSegmentedColormap
-from pyfits import getdata, PrimaryHDU
 from sys import argv
 
 import numpy as np
+import scipy.interpolate as inter
+# from matplotlib.cm import get_cmap
+# from matplotlib.colors import LinearSegmentedColormap
+from pyfits import getdata, PrimaryHDU
 
+import params
 from tools_sofi import rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
 
 coordnames = rdarg(argv, 'coord', list, ['x', 'y', 'z'], str)
 fitcat = rdarg(argv, 'fitcat', list, ['HDFS', 'UDF', 'mosaic'], str)
-snaps = rdarg(argv, 'snap', list, [10, 11, 12, 13, 14], int)
+snaps = rdarg(argv, 'snap', list, [8, 9, 10, 11, 12, 13, 14], int)
 scodes = rdarg(argv, 'scodes', str, '/net/abnoba/scratch2/gallegos/Research/MUSE/codes/Sofi/')
 overwrite = rdarg(argv, 'overwrite', bool, False)
 cubecorr = rdarg(argv, 'cubecorr', bool, False)
+caseA = rdarg(argv, 'caseA', bool, True)
+scase = '_CaseA' * caseA
 halfplot = rdarg(argv, 'halfplot', bool, False)
 extraname = rdarg(argv, 'extraname', str, '')#'HM12')#
 galcov = rdarg(argv, 'galcov', bool, False)
 laemask = rdarg(argv, 'laemask', bool, False)
 histover = rdarg(argv, 'histover', bool, False)
-LLScubes = rdarg(argv, 'LLScubes', bool, False)
+LLScubes = rdarg(argv, 'LLS', bool, False)
 sql = rdarg(argv, 'sql', bool, False)
 sphericalLLS = rdarg(argv, 'sphericalLLS', bool, False)
 pairLLS = rdarg(argv, 'pairLLS', bool, False)
@@ -37,21 +40,24 @@ kde = rdarg(argv, 'kde', bool, False)
 nhiprof = rdarg(argv, 'nhi', bool, False)
 minres = rdarg(argv, 'minres', int, 512)
 maxres = rdarg(argv, 'maxres', int, 4096)
-npref = rdarg(argv, 'npref', int, 8)
+model = rdarg(argv, 'model', str, 'HM01')#'HM12')#
+npref = rdarg(argv, 'npref', int, 12)
+rad = rdarg(argv, 'rad', int, 6)  # arcsec
+radprof = rdarg(argv, 'radprof', bool, False)
 sbhist = rdarg(argv, 'sbhist', bool, False)
-ssthr = rdarg(argv, 'ssthr', float, 1e10)#6.73E-3
+_ssthr = rdarg(argv, 'ssthr', float, None)#6.73e-3 or 1e10
 sbprof = rdarg(argv, 'sbprof', bool, False)
 snr = rdarg(argv, 'snr', bool, False)
 superstack = rdarg(argv, 'superstack', bool, False)
-types = rdarg(argv, 'type', list, ['NHI'], str) #NHtot, f_NHI, NHII
-radprof = rdarg(argv, 'radprof', bool, False)
-rad = rdarg(argv, 'rad', int, 8)
+type = rdarg(argv, 'type', str, 'NHI') #NHtot, f_NHI, NHII
 lutzmodel = rdarg(argv, 'lutzmodel', bool, False)
 unique = rdarg(argv, 'unique', bool, False)
 mask = rdarg(argv, 'mask', bool, False)
-model = rdarg(argv, 'model', str, 'HM01')#'HM12')#
 do_delaunay = rdarg(argv, 'delaunay', bool, False)
 temperature = rdarg(argv, 'temperature', bool, False)
+do_not = 0
+if do_not: from plyer import notification
+
 
 cdict1 = {'red': ((0.0, 0.0, 0.0),
 				  (0.5, 0.0, 0.1),
@@ -65,58 +71,37 @@ cdict1 = {'red': ((0.0, 0.0, 0.0),
 				   (1.0, 0.0, 0.0))
 		  }
 colors = [(0, 0, 1), (1, 1, 0), (1, 0, 0)]
-cm = LinearSegmentedColormap.from_list('sofi', colors, N=50)
-
-snames = {'10': '010_z003p984', '11': '011_z003p528', '12': '012_z003p017', '13': '013_z002p478', '14': '014_z002p237',
-		  '15': '015_z002p012'}
-reds = {'10': 984, '11': 528, '12': 17}
-redshifts = {'10': 3.984, '11': 3.528, '12': 3.017, '13': 2.478, '14': 2.237, '15': 2.012}
-asec2kpcs = {'10': 7.842, '11': 7.449, '12': 7.108, '13': 8.241, '14': 8.396, '15': 8.516}
-
-gamma_bkg = {}
-heat_bkg = {}
-sgamma = {}
-sheat = {}
-gamma_bkg['HM12'] = {'10': [5.71E-13, 3.28E-13, 2.31E-16], '11': [6.77E-13, 3.89E-13, 8.70E-16],
-			 '12': [7.66E-13, 4.42E-13, 2.10E-15], '13': [9.50E-13, 5.55E-13, 9.06E-15],
-			 '14': [9.64E-13, 5.67E-13, 1.13E-14]}
-
-heat_bkg['HM12'] = {'10': [2.27E-12, 2.18E-12, 7.24E-15],
-			'11': [2.68E-12, 2.62E-12, 2.33E-14],
-			'12': [3.02E-12, 3.05E-12, 5.01E-14],
-			'13': [3.75E-12, 4.22E-12, 1.78E-13],
-			'14': [3.81E-12, 4.42E-12, 2.18E-13]}
+#cm = LinearSegmentedColormap.from_list('sofi', colors, N=50)
 
 
-gamma_bkg['HM01'] = {'10': [.9E-12, 3.28E-13, 2.31E-16],
-					 '11': [1E-12, 3.89E-13, 8.70E-16],
-					 '12': [1.5E-12, 4.42E-13, 2.10E-15],
-					 '13': [1.7E-12, 5.55E-13, 9.06E-15],
-					 '14': [1.9E-12, 5.67E-13, 1.13E-14]}
+gamma_bkg = params.gamma_bkg[model]
+heat_bkg = params.heat_bkg[model]
+snames = params.snames
+redshifts = params.redshifts
+asec2kpcs = params.asec2kpcs
+ssthr = params.nhSS[model]
+if _ssthr is not None:
+	ssthr = {}
+	for snap in snaps:
+		ssthr[str(snap)] = _ssthr
 
-heat_bkg['HM01'] = {'10': [3E-12, 2.18E-12, 7.24E-15],
-					'11': [4E-12, 2.62E-12, 2.33E-14],
-					'12': [5E-12, 3.05E-12, 5.01E-14],
-					'13': [5.5E-12, 4.22E-12, 1.78E-13],
-					'14': [6E-12, 4.42E-12, 2.18E-13]}
+dz = params.dz
+sbpeaks = params.sbpeaks
+zlens = params.zlens
+dndz = params.dndz
+fLLScorr = params.fLLScorr
 
+nhi_fit = params.nhi_fit[model]
 
-dz = {'10': 0.0255, '11': .03, '12': .035}
-
-# sbpeaks = [2.396]
-# sbpeaks = {'10': 1.011, '11': 1.484, '12':2.396} # for an aperture of 1 asec^2!!! I am flux2sberting to flux later on
-sbpeaks = {'10': .739, '11': 1.293, '12': 2.579}  # for an aperture of 1 asec^2!!! I am flux2sberting to flux later on
-zlens = {'10': 34, '11': 29, '12': 25, '13': 20, '14': 18, '15': 16}
-dndz = {'10': 3., '11': 2.3, '12': 2., '13': 1.3, '14': 1., '15': .5} # check last ones, high extrapolation w/r to Prochaska+10
 lcube = maxres # 4096
 coml = 25  # cMpc
 com2pix = 163.84  # lcube/coml
 kpc2pix = lcube / float(coml * 1e3)
 rads = np.array([0, 2, 4, 8, 12, 20, 30, 50, 100, 200])
 
-lognhi = [13, 14, 15, 16, 16.5, 17, 17.5, 17.7, 17.8, 18, 18.4, 18.7, 19, 19.4, 19.6, 19.8, 20.1, 20.5, 21]
+lognhi = [10, 11, 12, 13, 14, 15, 16, 16.5, 17, 17.5, 17.7, 17.8, 18, 18.4, 18.7, 19, 19.4, 19.6, 19.8, 20.1, 20.5, 21, 22, 23, 30]
 nhi = np.power(10, lognhi)
-sb = [0.0001, 0.001, 0.003, 0.03, 0.08, 0.2, 0.45, 0.55, 0.6, 0.7, .8, 0.85, 0.9, 0.938, 0.96, 0.98, 1, 1, 1]
+sb = [0, 0.000001, 0.00001, 0.0001, 0.001, 0.003, 0.03, 0.08, 0.2, 0.45, 0.55, 0.6, 0.7, .8, 0.85, 0.9, 0.938, 0.96, 0.98, 1, 1, 1, 1, 1, 1]
 
 nhi2sb = inter.interp1d(nhi, sb)
 sb2nhi = inter.interp1d(sb, nhi)
@@ -168,11 +153,16 @@ if temperature:
 
 if LLScubes:
 	cubefolder = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/'
-	cubefolder = '../../EAGLE/'
-	saeed = '/net/galaxy-data/export/galaxydata/saeed/EAGLE/RefL0025N0752/'
+	#cubefolder = '../../EAGLE/'
+	#cubefolder = '/scratch/gallegos/EAGLE/'
+	
 	do_inter = False
-	b = [0, 	0, 		0, 			1, 			0, 		0, 			0, 		0,      1]
-	chombo, init_evol, col_dens, gal_mask, do_layers, do_nhfrac, do_lls, do_dndx,   do_dndz = b
+	
+	b = [0, 	0, 		0, 			0, 			0]
+	brun = rdarg(argv, 'run', list, b, int)
+	chombo, init_evol, col_dens, do_layers, do_dndx = brun
+	gal_mask, do_nhfrac, do_lls = 0, 0, 0
+	
 	lmax = int(np.log(maxres/minres)/np.log(2)) #3 if res 4096, 2 for 2048, 1 for 1024, 0 for 512
 
 	hdu = PrimaryHDU()
@@ -216,215 +206,331 @@ if LLScubes:
 		plt.close()
 
 	_cub = []
+	if do_dndx: mats = {}
 	for snap in snaps:
 		s = str(snap)
+		saeed = '/net/galaxy-data/export/galaxydata/saeed/EAGLE/RefL0025N0752/'
+
 		print 'snapshot', snap
 		red = redshifts[s]
 		# sbpeak = sbpeaks[snap]
 		asec2kpc = asec2kpcs[s]
-		zlen = zlens[s]
+		nl = zlens[s]#*3
+		print nl, 'layers'
 		asec2pix = asec2kpc * (1 + red) * kpc2pix
+		print 'asec2pix', asec2pix
 		sb2flux = asec2pix ** -2.
-		cat = getdata('../../EAGLE/cats/gals_snap%d.fits' % snap, 1)
-		size = cat['Mmean200']#in pkpc
-		ngals = len(size)
+		#cat = getdata('../../EAGLE/cats/gals_snap%d.fits' % snap, 1)
+		#size = cat['Mmean200']#in pkpc
+		#ngals = len(size)
 		#rad = np.max(([1]*ngals, size/asec2kpc), 0)*asec2pix
 		_rad = rad*asec2pix
+		fg = 1.
 		# check lower or upper case E in the scientific notation!!!
-		_sgamma = '%.2E_%.2E_%.2E' % tuple(gamma_bkg[model][s])
-		_sheat = '%.2E_%.2E_%.2E' % tuple(heat_bkg[model][s])
-		sgamma = '%.2E %.2E %.2E' % tuple(gamma_bkg[model][s])
-		sheat = '%.2E %.2E %.2E' % tuple(heat_bkg[model][s])
+		_sgamma = '%.2E_%.2E_%.2E' % tuple(np.array(gamma_bkg[s])*fg)
+		_sheat = '%.2E_%.2E_%.2E' % tuple(np.array(heat_bkg[s])*fg)
+		sgamma = '%.2E %.2E %.2E' % tuple(np.array(gamma_bkg[s])*fg)
+		sheat = '%.2E %.2E %.2E' % tuple(np.array(heat_bkg[s])*fg)
 		sname = snames[s]
 
-		for type in types:
-			fname = '%s/snapshot_%s/' % (saeed, sname)
-			if chombo:
+		fname = '%s/snapshot_%s/' % (saeed, sname)
+		if chombo:
+			print '\n\n\nChombo'
+			chname = fname+'chombo/snap_%s_%d_%d_%d.chombo.h5' % \
+					(sname, minres, maxres, npref)
+			if not os.path.isfile(chname) or overwrite:
+				if os.path.isfile(chname):
+					print 'removing chombo file'
+					os.system('rm %s' % chname)
 				glob.os.chdir(fname + 'chombo')
 				os.system('./chombo.sh %d %d %d' % (minres, maxres, npref))
-				glob.os.chdir(scodes)
-			if init_evol:
-				glob.os.chdir(fname+'init_evol')
-				finit = 'SO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000' % \
-						(sname, minres, maxres, npref, _sgamma, _sheat, ssthr)
-				if not os.path.isfile(finit) or overwrite:
-					srun = './init_evol_sofi.sh %d %d %d 25. %.3f "%s" "%s" %.2E' % \
-						   (minres, maxres, npref, red, sgamma, sheat, ssthr)
+				if do_not:
+					notification.notify(
+						title='Done!',
+						message='Particle to Chombo',
+						app_name='Nefinia',
+						app_icon='~/notifsofi.png'
+					)
+			glob.os.chdir(scodes)
+		if init_evol:
+			print '\n\n\nInit evol'
+			glob.os.chdir(fname+'init_evol')
+			finit = 'SO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000' % \
+					(sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase)
+			if not os.path.isfile(finit) or overwrite:
+				if os.path.isfile(finit):
+					print 'removing init evol file'
+					os.system('rm %s' % finit)
+				srun = './init_evol.sh %d %d %d 25. %.3f "%s" "%s" %.2E' % \
+					   (minres, maxres, npref, red, sgamma, sheat, ssthr[s])
+				print srun
+				os.system(srun)
+				if do_not:
+					notification.notify(
+						title='Done!',
+						message='InitEvol',
+						app_name='Nefinia',
+						app_icon='~/notifsofi.png'
+					)
+			glob.os.chdir(scodes)
+		if col_dens:
+			print '\n\n\nColumn density!'
+			glob.os.chdir(fname + 'column_density')
+			finit = '../init_evol/SO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000' % \
+					(sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase)
+			if os.path.isfile(finit):
+				nc = 39  # number of cores
+				_s = saeed + '/snapshot_%s/column_density/layers/' % sname
+				_fl = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000_var_%s_proj_%d_lmax_%d_l_' % \
+								 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase, type, 1, lmax)
+				isfiles = True
+				for i in range(nl):
+					_file = '%s%d_%d.fits' % (_fl, i+1, nl)
+					_isfile = os.path.isfile(_file)
+					if overwrite and _isfile: os.system('rm %s' % _file)
+					isfiles &= _isfile
+				if not isfiles or overwrite:
+					srun = './column_density_layers.sh %s %s %d %d %d' % (finit, type, lmax, nl, nc)
 					print srun
 					os.system(srun)
-				glob.os.chdir(scodes)
-			if col_dens:
-				glob.os.chdir(fname + 'column_density')
-				finit = '../init_evol/SO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000' % \
-						(sname, minres, maxres, npref, _sgamma, _sheat, ssthr)
-				if os.path.isfile(finit):
-					nl = zlens[s]  # number of layers
-					nc = 15  # number of cores
-					_s = saeed + '/snapshot_%s/column_density/layers/' % sname
-					_fl = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000_var_%s_proj_%d_lmax_%d_l_' % \
-									 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr, type, 1, lmax)
-					isfiles = True
-					for i in range(nl): isfiles &= os.path.isfile('%s%d_%d.fits' % (_fl, i+1, nl))
+					if do_not:
+						notification.notify(
+							title='Done!',
+							message='Column density',
+							app_name='Nefinia',
+							app_icon='~/notifsofi.png'
+						)
+			else: print '%s 1 um' % finit
+			glob.os.chdir(scodes)
 
-					if not isfiles or overwrite:
-						srun = './column_density_layers.sh %s %s %d %d %d' % (finit, type, lmax, nl, nc)
-						print srun
-						os.system(srun)
-				else: print '%s not there?' % finit
-				glob.os.chdir(scodes)
+		sname = snames[s]
+		_s = saeed + '/snapshot_%s/column_density/layers/' % sname
 
-			nl = zlens[s]
-			sname = snames[s]
-			_s = saeed + '/snapshot_%s/column_density/layers/' % sname
+		for coord, proj in zip(['x'], [1]):#zip(coordnames, [1, 2, 3]):
+			if gal_mask:
+				zw = 3
+				outname = '%s/snap%s_%s.galmask_%darcsec.fits' % (cubefolder, snap, coord, rad)
+				if not os.path.isfile(outname) or overwrite:
+					mask = np.zeros((nl, lcube, lcube))
+					y, x = np.ogrid[0: lcube, 0: lcube]
+					c = ['x', 'y', 'z']
+					c.remove(coord)
+					xc, yc, zc = [cat[c[0]] * com2pix, cat[c[1]] * com2pix, (cat[coord] * nl / coml).astype(int)]
+					ids = cat['ID']
+					cool = cat['U'] < 0
+					for i in np.arange(len(ids))[cool]:
+						print '%d %d %d %d' % (i, ids[i], xc[i], yc[i])
+						gal = ((x - xc[i]) ** 2 + (y - yc[i]) ** 2 < _rad ** 2)
+						mask[zc[i]-zw: zc[i]+zw+1, gal] = ids[i]
+					hdu.data = mask
+					hdu.writeto(outname, clobber=True)
 
-			for coord, proj in zip(['x'], [1]):#zip(coordnames, [1, 2, 3]):
-				if gal_mask:
-					outname = '%s/snap%s_%s_r%d.mask.fits' % (cubefolder, snap, coord, rad)
-					if not os.path.isfile(outname) or overwrite:
-						mask = np.zeros((lcube, lcube))
-						y, x = np.ogrid[0: lcube, 0: lcube]
-						c = ['x', 'y', 'z']
-						c.remove(coord)
-						xc, yc = [cat[c[0]] * com2pix, cat[c[1]] * com2pix]
-						ids = cat['ID']
-						for i in range(len(xc)):
-							print '%d %d %d %d' % (i, ids[i], xc[i], yc[i])
-							gal = ((x - xc[i]) ** 2 + (y - yc[i]) ** 2 < _rad ** 2)
-							mask[gal] = ids[i]
-						hdu.data = mask
-						hdu.writeto(outname, clobber=True)
-				if do_layers:
+			if do_layers:
+				print 'combinig layers!'
+				outname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.%s.fits' % (cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase, type)
+				if not os.path.isfile(outname) or overwrite:
 					cubes = []
 					for i in range(nl):
-							flayer = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E.ts0000_var_%s_proj_%d_lmax_%d_l_%d_%d.fits' % \
-									 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr, type, proj, lmax, i+1, nl)
+							flayer = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000_var_%s_proj_%d_lmax_%d_l_%d_%d.fits' % \
+									 (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase, type, proj, lmax, i+1, nl)
 							cubes.append(getdata(flayer))
 
-					print 'done loading layers'
 					cubes = np.array(cubes)
 					hdu.data = cubes
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, type), clobber=True)
+					hdu.writeto(outname, clobber=True)
 					print 'done %s cube' % type
 
+				else:
+					cubes = getdata(outname)
 
-				if do_nhfrac:
-					cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, type))
-					logcube = np.log10(cubes)
-					nhis = np.arange(15, 22, .1)
-					cool = (logcube > nhis[0]) & (logcube < nhis[-1])
-					hist, bins = np.histogram(logcube[cool], nhis)
-					sumh = float(np.sum(hist))
-					cumh = [np.sum(hist[i:])/sumh for i in range(len(hist))]
-					_dndz = np.array(cumh)*nl/dz[s]
+				if do_not:
+					notification.notify(
+						title='Done!',
+						message='Layers',
+						app_name='Nefinia',
+						app_icon='~/notifsofi.png'
+					)
+			if do_nhfrac:
+				cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
+							(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], type))
+				logcube = np.log10(cubes)
+				nhis = np.arange(15, 22, .1)
+				cool = (logcube > nhis[0]) & (logcube < nhis[-1])
+				hist, bins = np.histogram(logcube[cool], nhis)
+				sumh = float(np.sum(hist))
+				cumh = [np.sum(hist[i:])/sumh for i in range(len(hist))]
+				_dndz = np.array(cumh)*nl/dz[s]
 
-					plt.figure(figsize=(7, 7))
-					plt.scatter(bins[:-1], np.log10(hist)-bins[:-1])
-					plt.xlabel(type)
-					plt.ylabel('log(f_%s)' % type)
-					#plt.ylim([-4.2, 0.2])
-					plt.savefig('../../EAGLE/%sfrac_%s_%s_%d_%d_%d_%.2E.jpg' %
-								(type, coord, model, minres, maxres, nl, ssthr))
-					plt.close()
-				if do_lls:
-					cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr, 'NHI'))
-					logcube = np.log10(cubes)
-					cool = logcube > 17.9
-					lls = np.zeros(logcube.shape)
-					lls[cool] = 1
-					hdu.data = lls
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d.LLS.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, nl), clobber=True)
-					print 'done LLS cube', snap, coord
+				plt.figure(figsize=(7, 7))
+				plt.scatter(bins[:-1], np.log10(hist)-bins[:-1])
+				plt.xlabel(type)
+				plt.ylabel('log(f_%s)' % type)
+				#plt.ylim([-4.2, 0.2])
+				plt.savefig('../../EAGLE/%sfrac_%s_%s_%d_%d_%d_%.2E.jpg' %
+							(type, coord, model, minres, maxres, nl, ssthr[s]))
+				plt.close()
 
-				if do_dndx:
-					cname = 'snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s' %\
-							   (snap, coord, model, minres, maxres, npref, nl, ssthr, 'NHI')
-					cubename = '%s/%s.fits' % (cubefolder, cname)
-					print cubename
-					cubes = getdata(cubename)
-					zl, yl, xl = cubes.shape
-					zw = 1
-					zn = zl/zw
-					lc = []
-					for i in range(zn): lc.append(np.sum(cubes[i:i+zw, :, :], 0))
-					lc = np.log10(lc)
-					dzdx = (1.+red)**2/sqrt((1-.714)*(1+red)**3+.714)
-					v = 2.99792458e5*dz[s]*zw/float(zlen)/(1+red)
-					_lls = np.arange(12, 23, .5)
-					nhis, dndxs, dndzs = [[], [], []]
+			if do_lls:
+				zs, ls, a = 3, 1.46, 1.7
+				_ls, _a = .11, .22
+				def l(z, zs=3, ls=1.46, a=1.70):
+					return ls * ((1 + z) / (1 + zs)) ** a
+				fnhiname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.NHI.fits' % (cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase)
 
-					for i in range(len(_lls)-1):
-						cool = np.sum((lc>=_lls[i])&(lc<_lls[i+1]))
-						dNHI = float(10.**_lls[i+1]-10**_lls[i])
-						lpos = (10.**_lls[i+1]+10**_lls[i])/2.
-						dndz = cool/(dz[s]*zn*zw/float(zl))/float(maxres)**2
-						dndx = dndz/dzdx/dNHI
-						print 'NHI', _lls[i], _lls[i+1], 'dn/dz', dndz, 'dn/dx', dndx
-						nhis.append(lpos)
-						dndxs.append(dndx)
-						dndzs.append(dndz)
+				fllsname = '%s/snap%d_%s_%s_%d_%d_%d.LLS.fits' % (cubefolder, snap, coord, model, minres, maxres, nl)
+				fllsnamecorr = '%s/snap%d_%s_%s_%d_%d_%d.LLScorr.fits' % (cubefolder, snap, coord, model, minres, maxres, nl)
+				if not os.path.isfile(fllsname) or overwrite:
+					cubes = getdata(fnhiname)
+					_cubes = np.copy(cubes)
+					llsNHI = 17.5
+					lls0 = cubes > 10 ** llsNHI
+					#lls = np.zeros(cubes.shape)
+					#lls[cool] = 1
+					hdu.data = lls0.astype(float)#lls
+					hdu.writeto(fllsname, clobber=True)
+					pre = 10
+					lz = l(red, zs, ls, a)
 
-					lnhis = np.log10(nhis)
-					ldndx = np.log10(dndxs)
-					plt.plot(lnhis, ldndx)
-					plt.xlim(12, 23)
-					plt.ylim(-27, -9)
-					plt.xticks([12, 14, 16, 18, 20, 22])
-					plt.yticks([-25, -23, -21, -19, -17, -15, -13, -11, -9])
-					plt.xlabel(r'log$_{10}N_{\mathrm{NHI}}$[cm$^{-2}$]')
-					plt.ylabel(r'log$_{10}\partial^2n/\partial N_{\mathrm{NHI}}\partial X$')
-					plt.savefig('../../Figures/cddf_%s_v%d.jpg' % (cname, v))
-					plt.close()
-					dndz = [np.sum(dndzs[i:]) for i in range(len(dndzs))]
-					plt.plot(_lls[:-1], dndz)
-					plt.semilogy()
-					plt.xlabel(r'log$_{10}N_{\mathrm{NHI}}$[cm$^{-2}$]')
-					plt.ylabel(r'$\partial n/\partial z$')
-					plt.savefig('../../Figures/dndz_%s_v%d.jpg' % (cname, v))
-					plt.close()
+					if 1:#not os.path.isfile(fllsnamecorr) or overwrite:
+						if 1:
+							dndz0 = np.mean(lls0) * nl / dz[s]
+							dndz = dndz0
+							diff = dndz / lz
+							#nhi = cubes*lz/dndz
+							#dndz2 = np.mean(nhi>10**llsNHI)*nl/dz[s]
+							#print 'new dndz', dndz2
 
-				if do_dndz:
-					cname = 'logNHI_snap%d_%s' % (snap, coord)
-					mname = 'snap%d_%s_r%d.mask' % (snap, coord, rad)
-					cubename = '%s/%s.fits' % (cubefolder, cname)
-					maskname = '%s/%s.fits' % (cubefolder, mname)
-					print cubename
-					cubes = getdata(cubename)
-					lls = cubes > 17.5
-					cubes[lls] = 1
-					cubes[~lls] = 0
-					mask = getdata(maskname)
-					gals = mask > 0
-					cubes[gals] = np.nan
-					_mean = np.nanmean(cubes)
-					_cub.append(cubes)
-					print 'snap %d %s lls mean %f dndz %f' % (snap, coord, _mean, _mean/dz[s])
 
+							while abs(diff-1)>1e-3:
+								_cubes /= diff
+								lls = _cubes > 10 ** llsNHI
+								dndz = np.mean(lls) * nl / dz[s]
+								diff = dndz / lz
+								print 'diff', diff, 'dndz', dndz
+						else:
+							lls = cubes > 10 ** nhi_fit[s]
+
+						hdu.data = _cubes
+						hdu.writeto(fllsname.replace('.LLS.', '.NHIcorr.'), clobber=True)
+						hdu.data = lls.astype(float)
+						hdu.writeto(fllsnamecorr, clobber=True)
+				else:
+					lls0 = getdata(fllsname)
+
+				#_z,_y,_x = lls0.shape
+				#_lls0 = np.zeros((nl/5, _y, _x))
+				#for i in range(nl/5):
+			#		_lls0[i] = np.sum(lls0[i: i+6], 0)
+
+				#error propagation
+				error = np.sqrt(((1 + red) / (1 + zs)) ** a * _ls**2 * ls * a * ((1 + red) / (1 + zs)) ** (a-1) * _a**2)
+				lz = l(red, zs, ls, a)
 				if 0:
-					hist, bins = np.histogram(lcube[lcube > 17.9], 30)
-					sumh = float(maxres)**2
-					cumh = [np.sum(hist[i:]) / sumh for i in range(len(hist))]
-					_dndz = np.array(cumh) / dz[s]
-					dndz_fit = inter.interp1d(_dndz, bins[:-1])
-					cool = lcube > dndz_fit(dndz[s])
-					lls = np.zeros(lcube.shape)
-					lls[cool] = 1
-					hdu.data = lls
-					hdu.writeto('%s/snap%d_%s_%s_%d_%d_%d.LLS.fits' %
-								(cubefolder, snap, coord, model, minres, maxres, nl), clobber=True)
-					print 'done LLS cube, rescaling done for NHI', dndz_fit(dndz[s])
+					lzs = []
+					lzs.append(l(red, zs, ls, a))
+					lzs.append(l(red, zs, ls+_ls, a))
+					lzs.append(l(red, zs, ls-_ls, a))
+					lzs.append(l(red, zs, ls, a+_a))
+					lzs.append(l(red, zs, ls, a-_a))
+					lzs.append(l(red, zs, ls+_ls, a+_a))
+					lzs.append(l(red, zs, ls+_ls, a-_a))
+					lzs.append(l(red, zs, ls-_ls, a+_a))
+					lzs.append(l(red, zs, ls-_ls, a-_a))
+					lzmax, lzmin = np.amax(lzs), np.amin(lzs)
+				print 'dndz sim %.2f simcorr %.2f obs %.2f +-%.2f corr %.2f +-%.2f' % (dndz0, dndz, lz, error, lz / dndz, error / dndz)
+
+			if do_dndx:
+				print 'dndx!'
+				_type = type#'NHI'
+				cname = 'snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.%s' %\
+						   (snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase, _type)
+				if _type=='NHIcorr':
+					cname = 'snap%d_%s_%s_%d_%d_%d.%s' % \
+							(snap, coord, model, minres, maxres, nl, _type)
+				cubename = '%s/%s.fits' % (cubefolder, cname)
+				zw = 1#nl/5
+				print cubename
+				v = 2.99792458e5 * dz[s] * zw / float(nl) / (1 + red)
+				fdat = '../../UVB/dndzdx_%s_snap%s_zw%d_ssthr%.0e_%d_%d_%d.%s.dat' % (model, snap, zw, ssthr[s], minres, maxres, npref, _type)
+				if not os.path.isfile(fdat) or overwrite:
+					cubes = getdata(cubename)
+					if type == 'density':
+						cubes *= (1+red)**2*coml*params.Mpc2cm/nl*params.meanbardens
+					zl, yl, xl = cubes.shape
+
+					if 0:
+						lc = np.sum(cubes, 0)
+						lc = np.log10(lc)
+						dzdx = (1.+red)**2/sqrt((1-.714)*(1+red)**3+.714)
+						_lls = np.arange(12, 23, .5)
+						nhis, dndxs, dndzs = [[], [], []]
+
+						for i in range(len(_lls)-1):
+							cool = np.sum((lc>=_lls[i])&(lc<_lls[i+1]))
+							dNHI = float(10.**_lls[i+1]-10**_lls[i])
+							lpos = (10.**_lls[i+1]+10**_lls[i])/2.
+							_dndz = cool/dz[s]/float(maxres)**2
+
+							dndx = _dndz/dzdx/dNHI
+							print 'NHI', _lls[i], _lls[i+1], 'dn/dz', _dndz, 'dn/dx', dndx
+							nhis.append(lpos)
+							dndxs.append(dndx)
+							dndzs.append(_dndz)
+
+						lnhis = np.log10(nhis)
+						ldndx = np.log10(dndxs)
+
+						_dndz = [np.sum(dndzs[i:]) for i in range(len(dndzs))]
+						sb = nhi2sb(nhis)
+						mat = np.array([lnhis, dndzs, _dndz, ldndx, sb])
+						np.savetxt(fdat.replace('.dat', '.allz.dat'), mat.T, header='logNHI cddf  dndz logdndx SBfit')
+
+					else:
+						zn = zl / zw
+						if zw == 1: _c = cubes
+						
+						else:
+							_c = []
+							for i in range(zn): _c.append(np.sum(cubes[i:i+zw, :, :], 0))
+							_c = np.array(_c)
+						lc = np.log10(_c)
+						dxdz = (1.+red)**2/sqrt(params.omega_m*(1+red)**3+params.omega_l)
+						_lls = np.arange(15, 22.6, .25)
+						dndx, dndz, cddf = [[], [], []]
+
+						for i in range(len(_lls)-1):
+							cool = (lc>=_lls[i])&(lc<_lls[i+1])
+							dNHI = float(10.**_lls[i+1]-10**_lls[i])
+							#lpos = np.nanmean(_c[cool])#(10.**_lls[i+1]+10**_lls[i])/2.
+							#if np.isnan(lpos): lpos = 10**_lls[i]
+							scool = np.mean(cool)*zn
+							_dndz = scool/dz[s]
+							_dndx = _dndz/dxdz
+							_cddf = _dndx/dNHI
+							print 'NHI %.2f %.2f' %(_lls[i], _lls[i+1]), 'dndz', _dndz, 'cddf', _cddf, 'dndx', _dndx
+							dndx.append(_dndx)
+							dndz.append(_dndz)
+							cddf.append(_cddf)
+
+						if do_not:
+							notification.notify(
+								title='Done!',
+								message='dndx',
+								app_name='Nefinia',
+								app_icon='~/notifsofi.png'
+							)
+						lnhis = _lls[:-1]
+						ldndx = np.log10(dndx)
+						dndz = np.array(dndz)
+						cddf = np.log10(cddf)
+						#_dndz = [np.sum(dndzs[i:]) for i in range(len(dndzs))]
+						sb = nhi2sb(10**lnhis)
+						mat = np.array([lnhis, dndz, dndx, cddf, sb])
+						np.savetxt(fdat, mat.T, header='logNHI dndz dndx cddf SBfit', fmt='%.3f')
+				else: mat = np.loadtxt(fdat).T
 
 
-				#cubes[cubes < nhi[0]] = nhi[0]
-				#cubes[cubes > nhi[-1]] = nhi[-1]
-				#sbcube = nhi2sb(cubes)
-				#sbcube[sbcube == sb[0]] == 0
-				#hdu.data = sbcube
-				#hdu.writeto('%s/snap%d_%s.SB.fits' % (cubefolder, snap, coord), clobber=True)
-				#print 'done SB cube'
+
 
 if sql:
 	conn = eagleSqlTools.connect('sgallego', 'dpTT852J')
@@ -1206,7 +1312,7 @@ if galcov:
 	cov = {}
 	rads = [[0.1, 2], [2, 4], [4, 8], [8, 12], [12, 16], [16, 20], [20, 30]]#, [30, 60], [60, 100]]
 	nr = len(rads)
-	for ff in ['UDF', 'HDFS']:#, 'mosaic']:
+	for ff in ['HDFS']:#, 'mosaic']:
 		pairs = getdata('../../%s/cats/lae_pairs.fits' % ff, 1)
 		theta = pairs['theta']
 		cool = (abs(pairs['shear']) <= zw0)# & (pairs['redshift1']<=3) & (pairs['redshift2']<=3)
@@ -1251,54 +1357,72 @@ if galcov:
 	plt.savefig('../../Figures/Gal_covfrac.jpg')
 
 if cubecorr:
+	r = 20
+	zw0 = 3
 	folder = '/net/galaxy-data/export/galaxydata/gallegos/'
 	fitcat = ['mosaic', 'UDF', 'HDFS']
-	names = ['DATACUBE_UDF-MOSAIC.z1300', 'DATACUBE_UDF-10', 'DATACUBE-HDFS-1.35-PROPVAR']
-	mnames = ['DATACUBE_UDF-MOSAIC.z1300.IM.Objects_Id', 'UDF10.z1300.IM.Objects_Id',
+	names = ['DATACUBE_UDF-MOSAIC', 'DATACUBE_UDF-10', 'DATACUBE-HDFS-1.35-PROPVAR']
+	mnames = ['DATACUBE_UDF-MOSAIC.IM.Objects_Id', 'DATACUBE_UDF-10.IM.Objects_Id',
 			  'DATACUBE-HDFS-1.35-PROPVAR.IM.Objects_Id']
+	gnames = ['mosaic.galmask_%darcsec' % r, 'UDF.galmask_%darcsec' % r,
+			  'HDFS.galmask_%darcsec' % r]
 	ext = '.fits'
+	do_csub = True
 	cut = 20
 	dim = (1, 2)
-	for ft, name, mname in zip(fitcat, names, mnames)[:1]:
+	for ft, name, mname, gname in [zip(fitcat, names, mnames, gnames)[0]]:
 		print ft
 		spec = open('%sspec.dat' % ft, 'w')
-		spec.write('#layer mean_1l mean_5l\n')
+		spec.write('#layer mean_1l mean_%dl\n' % (zw0*2+1))
 		fin = '%s%s/%s' % (folder, ft, name)
-		fcsub = '%s.csub' % fin
-		fout = '%s.corr' % fcsub
+		if do_csub: fin += '.csub'
+		fout = '%s.corr' % fin
 		fmask = '%s%s/%s' % (folder, ft, mname)
+		fgmask = '%s%s/%s' % (folder, ft, gname)
 
-		print 'get original csub cube'
-		cube = getdata(fcsub+ext)
+		print 'get original %scube' % ('csub ' * do_csub)
+		cube = getdata(fin+ext)
 		cube[cube == -999] = np.nan
 		z, y, x = cube.shape
+		_f = np.copy(cube)
 
 		print 'mask continuum objects'
-		_f = np.copy(cube)
-		if not os.path.isfile(fcsub+ext):
-			os.system("CubeBKGSub -cube %s%s -out %s%s -bpsize '1 1 20' -bfrad '0 0 2'" % (fin, ext, fcsub, ext))
 		mask = getdata(fmask+ext)
-		bad = mask[0] > 0
-		_f[:, bad] = np.nan
+		bad = mask > 0
+		_f[:, bad[0]] = np.nan
+
+		print 'mask 3d objects'
+		mask = getdata(fmask.replace('.IM', '')+ext)
+		bad = mask > 0
+		_f[bad] = np.nan
+
+		print 'mask LAE halos'
+		gmask = getdata(fgmask + ext)
+		#gmask2 = np.nansum(gmask, 0)
+		halos = gmask > 0
+		_f[halos] = np.nan
 
 		print 'find high bkg layers'
 
-		zw0 = 2
-		print 'Calculate mean bkg for non high layers, smoothed!!'
+		smooth = False
+		print 'Calculate mean bkg for non high layers, not smoothed!!'
 		m = np.nanmean(_f[:, cut: y - cut, cut: x - cut], dim)
 		for zz in range(z):
-			zmin = max(0, zz-zw0)
-			zmax = min(z, zz+zw0)
-			m5 = np.nanmean(_f[zmin: zmax+1, cut: y - cut, cut: x - cut])
+			if smooth:
+				zmin = max(0, zz-zw0)
+				zmax = min(z, zz+zw0)
+				m5 = np.nanmean(_f[zmin: zmax+1, cut: y - cut, cut: x - cut])
+			else:
+				m5 = np.nanmean(_f[zz, cut: y - cut, cut: x - cut])
 			print '%d %f %f' % (zz, m[zz], m5)
 			spec.write('%d %f %f\n' % (zz, m[zz], m5))
 			cube[zz, :, :] -= m5
 		mm = np.nanmean(m)
 		print 'mean sb value', mm, 'sum of all layers with their non masked pixels', mm*z
 		std = np.nanstd(m)
-		high = abs(m-mm) > 3*std
+		high = abs(m-mm) > 4*std
 		print np.sum(high), 'high bkg layers of', z, 'std', std
-		_f[high, :, :] = np.nan
+		cube[high, :, :] = np.nan
 
 		hdu = PrimaryHDU()
 		hdu.data = cube
@@ -1308,46 +1432,60 @@ if laemask:
 	import astropy.io.fits as fits
 	from astropy import wcs
 
-	def l2pix(l):
-		"""Convert wavelength to pixels"""
+	def red2pix(z):
+		"""Convert redshift to pixel"""
+		lya_rest = 1215.67
 		l0 = 4750.
 		pixsize = 1.25  # 1 pixel = 1.25 Angstrom
-		return (l - l0) / pixsize + 1
+		return (lya_rest * (1 + z) - l0) / pixsize + 1
 	fin = '../../'
 	fout = '/net/galaxy-data/export/galaxydata/gallegos/'
 	ext = '.fits'
-	cat = getdata(fin + 'UDF/cats/laes.fits', 1)
-	cubename = '%s/DATACUBE_UDF-10.fits' % fout
-	_cube = getdata(cubename)
-	zl, yl, xl = _cube.shape
-	hname = '%s/UDF/UDF10.z1300.fits' % fout
-	ttt, header_data_cube = getdata(hname, 0, header=True)
-	ra = cat['RA']
-	dec = cat['DEC']
-	wavelength = cat['LYALPHA_LBDA_OBS']
-	ids = cat['ID']
-	# Removing COMMENT key to avoid problems reading non-ascii characters
-	cards = header_data_cube.cards
-	bad = ['COMMENT' == b[0] for b in cards]
-	for i in range(np.sum(bad)): header_data_cube.remove('COMMENT')
-	hdulist = fits.open(cubename)
-	w = wcs.WCS(header_data_cube, hdulist)
-	x, y, z = np.round(w.all_world2pix(ra, dec, [1] * len(ra), 1)).astype(int)
-	z = np.round(l2pix(wavelength)).astype(int)
-	zw0 = 2
-	_y, _x = np.ogrid[0:yl, 0:xl]
-	cube = np.zeros((zl, yl, xl))
-	rad = 40 # 8 arcsec
-	for i in range(len(z)):
+	fitcat = ['mosaic', 'UDF', 'HDFS', 'MXDF']
+	names = ['DATACUBE_UDF-MOSAIC', 'DATACUBE_UDF-10', 'DATACUBE-HDFS-1.35-PROPVAR',
+			 'MXDF_DATACUBE_FINAL_PROPVAR']
+	hnames = ['DATACUBE_UDF-MOSAIC', 'UDF10.z1300', 'DATACUBE-HDFS-1.35-PROPVAR',
+			  'MXDF_DATACUBE_FINAL_PROPVAR']
+	mnames = ['DATACUBE_UDF-MOSAIC.IM.Objects_Id', 'UDF10.z1300.IM.Objects_Id',
+			  'DATACUBE-HDFS-1.35-PROPVAR.IM.Objects_Id',
+			  'MXDF_DATACUBE_FINAL_PROPVAR.IM.Objects_Id']
+	gnames = ['%s.galmask_%darcsec' % (fc, rad) for fc in fitcat]
+	for i in [-1]:
+		ft = fitcat[i]
+		name = names[i]
+		cat = getdata(fin + '%s/cats/laes.fits' % ft, 1)
+		cubename = '%s/%s/%s%s' % (fout, ft, name, ext)
+		_cube = getdata(cubename)
+		zl, yl, xl = _cube.shape
+		hname = '%s/%s/%s%s' % (fout, ft, hnames[i], ext)
+		ttt, header_data_cube = getdata(hname, 0, header=True)
+		ra = cat['RA']
+		dec = cat['DEC']
+		try: redshift = cat['z_muse']
+		except: redshift = cat['redshift']
+		ids = cat['ID']
+		# Removing COMMENT key to avoid problems reading non-ascii characters
+		cards = header_data_cube.cards
+		bad = ['COMMENT' == b[0] for b in cards]
+		for i in range(np.sum(bad)): header_data_cube.remove('COMMENT')
+		hdulist = fits.open(cubename)
+		w = wcs.WCS(header_data_cube, hdulist)
+		x, y, z = np.round(w.all_world2pix(ra, dec, [1] * len(ra), 1)).astype(int)
+		z = np.round(red2pix(redshift)).astype(int)
+		zw0 = 20
+		_y, _x = np.ogrid[0:yl, 0:xl]
+		cube = np.zeros((zl, yl, xl))
 
-		gal = (x[i]-_x)**2+(y[i]-_y)**2 < rad**2
-		print i, np.sum(gal)
-		zmin = max(0, z[i] - zw0)
-		zmax = min(zl, z[i] + zw0)
-		cube[zmin: zmax+1, gal] = ids[i]
-	#hdu = PrimaryHDU()
-	#hdu.data = cube
-	#hdu.writeto(fout+'UDF/UDF.galmask_8arcsec.fits', clobber=True)
+		rpix = rad*5
+		for i in range(len(z)):
+			gal = (x[i]-_x)**2+(y[i]-_y)**2 < rpix**2
+			print i, np.sum(gal)
+			zmin = max(0, z[i] - zw0)
+			zmax = min(zl, z[i] + zw0 + 1)
+			cube[zmin: zmax, gal] += ids[i]
+		hdu = PrimaryHDU()
+		hdu.data = cube
+		hdu.writeto(fout+'%s/%s.galmask_%darcsec.fits' % (ft,ft, rad), clobber=True)
 
 if snr:
 	def sclipping(fits, nsigma, dim=(0), mask=None):
@@ -1378,7 +1516,7 @@ if snr:
 	do_sclip = 0
 	fix_red = 0
 	zoff = 0
-	spectype = [2]
+	spectype = [1, 2, 3, 4]#[2]
 	sspec = '.spec'
 	for _sp in spectype: sspec += '%d' % _sp
 	if ptype=='laes':
@@ -1391,12 +1529,13 @@ if snr:
 	if ptype=='spectra':
 		do_muse = 1
 		do_spectra = 1
+		do_rand = 0
 		zw0 = 0
 
 	if ptype=='muse':
 		do_muse = 1
 		do_mplot = 1
-		zw0 = 2
+		zw0 = 1
 	if ptype=='snr':
 		do_eagle = 1
 		do_muse = 1
@@ -1580,173 +1719,189 @@ if snr:
 	mrand = {}
 
 	if do_muse:
-		for nr in range(nrand): frand['%d' % nr], mrand['%d' % nr] = [[], []]
-		for _fitcat in fitcat:
-			cat = getdata('../../%s/cats/laes.fits' % _fitcat, 1)
-			if _fitcat == 'UDF':
-				fwhm = cat['LYALPHA_FWHM_OBS']
 
-			ids = cat['ID']
-			zs = cat['redshift']
-			#ls = np.round((1215.67*(1+zs)-4750.)/1.25).astype(int)
-			ls = 1215.67 * (1 + zs)
-			sconf = cat['sconf']
-			spec = cat['spec']
+		if overwrite:
+			for nr in range(nrand): frand['%d' % nr], mrand['%d' % nr] = [[], []]
+			for _fitcat in fitcat:
+				cat = getdata('../../%s/cats/laes.fits' % _fitcat, 1)
+				if _fitcat == 'UDF':
+					fwhm = cat['LYALPHA_FWHM_OBS']
 
-			scool = False
-			for _sp in spectype: scool |= spec == _sp
-			cool = (sconf >= 2) & (zs < 4) & scool
-			fitin = []
-			corrupt = 0
-			for i, l in zip(ids[cool], ls):
-				ffits = flaes + '/%s/LAEs/%d.fits' % (_fitcat, i)
-				if os.path.isfile(ffits):
-					if do_rand:
-						for nr in range(nrand):
-							try:
-								fr = getdata(ffits.replace('.fits', '.rand%d.fits' %nr))
-								mr = getdata(ffits.replace('.fits', '.rand.mask%d.fits' %nr))
-								zr, yr, xr = fr.shape
-								if ptype=='snr':
-									_fr = fr[:, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-									frand['%d' % nr].append(_fr)
-								else:
-									_fr = fr[zr/2-zw0: zr/2+zw0+1, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-									frand['%d' % nr].append(np.nansum(_fr, 0))
-								_mr = mr[yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
-								mrand['%d' % nr].append(_mr)
-							except:
-								#frand['%d' % nr].append(frand['0'])
-								#mrand['%d' % nr].append(mrand['0'])
-								print 'Missing rand?', nr
-								pass
-					try:
-						fit = getdata(ffits)
-						#fall2.append(fit)
-						zlm, ylm, xlm = fit.shape
-						zlm0 = zlm
-						off = 0
+				ids = cat['ID']
+				zs = cat['redshift']
+				#ls = np.round((1215.67*(1+zs)-4750.)/1.25).astype(int)
+				ls = 1215.67 * (1 + zs)
+				sconf = cat['sconf']
+				spec = cat['spec']
 
-						_fit = []
-						if zw0 == 0:
-							_fit = fit[:, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-							zrange = np.arange(zlm)
-						else:
-							#zrange = [zlm/2, zlm/2+zw, zlm/2-zw, zlm/2+2*zw, zlm/2-2*zw, zlm/2+3*zw, zlm/2-3*zw]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
-							zrange = [zlm/2+zoff, zlm/2+3, zlm/2-3, zlm/2+7, zlm/2+10, zlm/2+15, zlm/2+20]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
-							if do_spectra:
-								zrange = np.arange(zlm / 2 - (zlm / zw0) * zw - zw0, zlm / 2 + (zlm / zw0) * zw, zw0)
-								zrange = zrange[(zrange-zw0>0) & (zrange+zw0+1<zlm)]
-							for zz in zrange:
-								fcool = fit[zz-zw0: zz+zw0+1, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-								_fit.append(np.nansum(fcool, 0))
-						_fit = np.array(_fit)
-						fall.append(_fit)
+				scool = False
+				for _sp in spectype: scool |= spec == _sp
+				cool = (sconf >= 2) & (zs < 4) & scool
+				fitin = []
+				corrupt = 0
+				for i, l in zip(ids[cool], ls):
+					ffits = flaes + '/%s/LAEs/%d.fits' % (_fitcat, i)
+					if os.path.isfile(ffits):
+						if do_rand:
+							for nr in range(nrand):
+								try:
+									fr = getdata(ffits.replace('.fits', '.rand%d.fits' %nr))
+									mr = getdata(ffits.replace('.fits', '.rand.mask%d.fits' %nr))
+									zr, yr, xr = fr.shape
+									if ptype=='snr':
+										_fr = fr[:, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
+										frand['%d' % nr].append(_fr)
+									else:
+										_fr = fr[zr/2-zw0: zr/2+zw0+1, yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
+										frand['%d' % nr].append(np.nansum(np.nanmean(_fr, (1,2))))
+									_mr = mr[yr/2-wmax: yr/2+wmax+1, xr/2-wmax: xr/2+wmax+1]
+									mrand['%d' % nr].append(_mr)
+								except:
+									#frand['%d' % nr].append(frand['0'])
+									#mrand['%d' % nr].append(mrand['0'])
+									print 'Missing rand?', nr
+									pass
+						try:
+							fit = getdata(ffits)
+							#fall2.append(fit)
+							zlm, ylm, xlm = fit.shape
+							zlm0 = zlm
+							off = 0
+
+							_fit = []
+							if zw0 == 0:
+								_fit = fit[:, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
+								zrange = np.arange(zlm)
+							else:
+								#zrange = [zlm/2, zlm/2+zw, zlm/2-zw, zlm/2+2*zw, zlm/2-2*zw, zlm/2+3*zw, zlm/2-3*zw]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
+								zrange = [zlm/2+zoff, zlm/2+3, zlm/2-3, zlm/2+7, zlm/2+10, zlm/2+15, zlm/2+20]#np.arange(zlm/2-(zlm/zw0)*zw-zw0, zlm/2+(zlm/zw0)*zw, zw)
+								if do_spectra:
+									zrange = np.arange(zlm / 2 - (zlm / zw0) * zw - zw0, zlm / 2 + (zlm / zw0) * zw, zw0)
+									zrange = zrange[(zrange-zw0>0) & (zrange+zw0+1<zlm)]
+								for zz in zrange:
+									fcool = fit[zz-zw0: zz+zw0+1, ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
+									_fit.append(fcool)
+							_fit = np.array(_fit)
+							fall.append(_fit)
+							if do_mask:
+								mit = getdata(ffits.replace('.fits', '.mask.fits'))
+								_mit = mit[ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
+								mall.append(_mit)
+
+							if do_laes:
+								ym, xm = np.ogrid[0: ylm, 0: xlm]
+								rgal = 1/asec2pix_muse
+								rcgm = np.array([2, 5])/asec2pix_muse
+								cm = (xm - xlm / 2.) ** 2 + (ym - ylm / 2.) ** 2
+								gal = (cm < rgal ** 2)
+								cgm = (cm >= rcgm[0] ** 2) & (cm < rcgm[1] ** 2)
+								if mask: _fit[:, np.array(_mit) > 0] = np.nan
+								fgal = np.nanmedian(_fit[:, gal], 1)
+								fcgm = np.nanmedian(_fit[:, cgm], 1)
+								fnan = np.where(np.isnan(fgal))[0]
+								nnan = len(fnan)
+
+								fgal[fnan] = 0
+								fcgm[fnan] = 0
+								galstd = np.nanstd(fgal)
+								cgmstd = np.nanstd(fcgm)
+								galmax = np.nanmax(fgal[zlm/2-6: zlm/2+6])
+								cgmmax = np.nanmax(fcgm[zlm/2-6: zlm/2+6])
+								xmax = np.where(fgal == galmax)[0]-zlm/2
+								xmax2 = np.where(fcgm == cgmmax)[0]-zlm/2
+								print i, 'fgal %.3f std %.3f' % (galmax, galstd), (xmax+1)*68.5
+								print 'fcgm %.3f std %.3f' % (cgmmax, cgmstd), (xmax2+1)*68.5
+								fig, ax = plt.subplots(figsize=(10, 5))
+								xz = (zrange-zlm0/2)
+								xlim = 22
+								_xz = xz*68.5
+								_xlim = xlim*68.5
+								plt.plot(_xz, [0]*len(xz), color='gray')
+								plt.xlim(-_xlim, _xlim)
+								plt.grid()
+
+								plt.xlabel('v [km/s]')
+								plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
+								ax2 = ax.twiny()
+								plt.xlabel(r'wavelength [$\mathrm{\AA}$]')
+								_xz = xz*1.25+l
+								_xlim = xlim*1.25
+
+								plt.plot(_xz, fcgm * flux2sb, label='CGM')
+								plt.scatter(_xz, fcgm*flux2sb)
+								#plt.scatter(xmax, galmax*flux2sb*1.1, label=r'Ly$\alpha$ peak', marker='v')
+								for ff in fnan:
+									plt.axvline(_xz[ff], color='red', linewidth=10, alpha=.2)
+								plt.xlim(l-_xlim, l+_xlim)
+								plt.legend()
+								plt.savefig('../../%s/plots/%d_CGMspec.jpg' % (_fitcat, i))
+								plt.plot(_xz, fgal * flux2sb, label='Galaxy')
+								plt.scatter(_xz, fgal * flux2sb)
+								plt.savefig('../../%s/plots/%d_spec.jpg' % (_fitcat, i))
+								plt.close()
+						except:
+							corrupt += 1
+							print 'Problem!?', ffits
+							pass
+			if ptype != 'laes':
+				fall = np.array(fall)
+				# median or mean with sclipping?
+				# fmuse = np.nanmedian(fall, 0)
+				if do_mask:
+					bad = np.array(mall) > 0
+					for i in range(len(fall)):
+						fall[i, :, bad[i]] = np.nan
+				if do_sclip:
+					stds = np.nanstd(fall, 0)
+					high_sigma = np.abs(fall) > nsigma * stds
+					fall[high_sigma] = np.nan
+				# return fits
+				# fall = sclipping(fall, nsig, mask=bad)
+				fmuse = np.nanmean(fall, 0)
+
+				# fall2 = np.array(fall2)
+				# fall2 = sclipping(fall2, 5, 0)[0]
+				# fmuse2 = np.nanmean(fall2, 0)
+				hdu = PrimaryHDU()
+				hdu.data = fmuse
+				hdu.writeto('../../all/simplestacks/stack%s%s%s%s.fits' % (scat, '.mask' * do_mask, sspec,
+																		   extraname), clobber=True)
+
+				if do_rand:
+					for nr in range(nrand):
+						frand['%d' % nr] = np.array(frand['%d' % nr])
 						if do_mask:
-							mit = getdata(ffits.replace('.fits', '.mask.fits'))
-							_mit = mit[ylm/2-wmax: ylm/2+wmax+1, xlm/2-wmax: xlm/2+wmax+1]
-							mall.append(_mit)
-
-						if do_laes:
-							ym, xm = np.ogrid[0: ylm, 0: xlm]
-							rgal = 1/asec2pix_muse
-							rcgm = np.array([2, 5])/asec2pix_muse
-							cm = (xm - xlm / 2.) ** 2 + (ym - ylm / 2.) ** 2
-							gal = (cm < rgal ** 2)
-							cgm = (cm >= rcgm[0] ** 2) & (cm < rcgm[1] ** 2)
-							if mask: _fit[:, np.array(_mit) > 0] = np.nan
-							fgal = np.nanmedian(_fit[:, gal], 1)
-							fcgm = np.nanmedian(_fit[:, cgm], 1)
-							fnan = np.where(np.isnan(fgal))[0]
-							nnan = len(fnan)
-
-							fgal[fnan] = 0
-							fcgm[fnan] = 0
-							galstd = np.nanstd(fgal)
-							cgmstd = np.nanstd(fcgm)
-							galmax = np.nanmax(fgal[zlm/2-6: zlm/2+6])
-							cgmmax = np.nanmax(fcgm[zlm/2-6: zlm/2+6])
-							xmax = np.where(fgal == galmax)[0]-zlm/2
-							xmax2 = np.where(fcgm == cgmmax)[0]-zlm/2
-							print i, 'fgal %.3f std %.3f' % (galmax, galstd), (xmax+1)*68.5
-							print 'fcgm %.3f std %.3f' % (cgmmax, cgmstd), (xmax2+1)*68.5
-							fig, ax = plt.subplots(figsize=(10, 5))
-							xz = (zrange-zlm0/2)
-							xlim = 22
-							_xz = xz*68.5
-							_xlim = xlim*68.5
-							plt.plot(_xz, [0]*len(xz), color='gray')
-							plt.xlim(-_xlim, _xlim)
-							plt.grid()
-
-							plt.xlabel('v [km/s]')
-							plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
-							ax2 = ax.twiny()
-							plt.xlabel(r'wavelength [$\mathrm{\AA}$]')
-							_xz = xz*1.25+l
-							_xlim = xlim*1.25
-
-							plt.plot(_xz, fcgm * flux2sb, label='CGM')
-							plt.scatter(_xz, fcgm*flux2sb)
-							#plt.scatter(xmax, galmax*flux2sb*1.1, label=r'Ly$\alpha$ peak', marker='v')
-							for ff in fnan:
-								plt.axvline(_xz[ff], color='red', linewidth=10, alpha=.2)
-							plt.xlim(l-_xlim, l+_xlim)
-							plt.legend()
-							plt.savefig('../../%s/plots/%d_CGMspec.jpg' % (_fitcat, i))
-							plt.plot(_xz, fgal * flux2sb, label='Galaxy')
-							plt.scatter(_xz, fgal * flux2sb)
-							plt.savefig('../../%s/plots/%d_spec.jpg' % (_fitcat, i))
-							plt.close()
-					except:
-						corrupt += 1
-						print 'Problem!?', ffits
-						pass
+							for i in range(len(frand['%d' % nr])):
+								bad = np.array(mrand['%d' % nr][i] > 0)
+								if ptype == 'snr':
+									frand['%d' % nr][i, :, bad] = np.nan
+								else:
+									frand['%d' % nr][i, bad] = np.nan
+						if do_sclip:
+							stds = np.nanstd(frand['%d' % nr], 0)
+							high_sigma = np.abs(frand['%d' % nr]) > nsigma * stds
+							frand['%d' % nr][high_sigma] = np.nan
+						# frand['%d' % nr] = sclipping(np.array(frand['%d' % nr]), nsig, mask=bad)
+						fr_mean = np.nanmean(frand['%d' % nr], 0)
+						if ptype == 'snr':
+							zlr, ylr, xlr = fr_mean.shape
+						else:
+							ylr, xlr = fr_mean.shape
 
 
-		if ptype!='laes':
-			fall = np.array(fall)
-			# median or mean with sclipping?
-			#fmuse = np.nanmedian(fall, 0)
-			if do_mask:
-				bad = np.array(mall) > 0
-				for i in range(len(fall)):
-					fall[i, :, bad[i]] = np.nan
-			if do_sclip:
-				stds = np.nanstd(fall, 0)
-				high_sigma = np.abs(fall) > nsigma * stds
-				fall[high_sigma] = np.nan
-			#return fits
-			#fall = sclipping(fall, nsig, mask=bad)
-			fmuse = np.nanmean(fall, 0)
+		else:
+			ffff= '/net/abnoba/scratch2/gallegos/Research/MUSE/all/simplestacks/'
+			fmuse = getdata(ffff+'stack_UDF.gmask.sclip4.fits')
+			fr = []
+			for nr in range(nrand):
+				_fr = getdata(ffff+'randstack_UDF.gmask.sclip.%d.fits' % nr)
+				frand['%d' % nr] = _fr
+				fr.append(_fr)
+			fr_mean = np.nanmean(fr, 0)
 
-
-			#fall2 = np.array(fall2)
-			#fall2 = sclipping(fall2, 5, 0)[0]
-			#fmuse2 = np.nanmean(fall2, 0)
-			hdu = PrimaryHDU()
-			hdu.data = fmuse
-			hdu.writeto('../../all/simplestacks/stack%s%s%s%s.fits' % (scat, '.mask'*do_mask, sspec,
-																	   extraname), clobber=True)
-
-			if do_rand:
-				for nr in range(nrand):
-					frand['%d' % nr] = np.array(frand['%d' % nr])
-					if do_mask:
-						for i in range(len(frand['%d' % nr])):
-							bad = np.array(mrand['%d' % nr][i] > 0)
-							if ptype=='snr': frand['%d' % nr][i, :, bad] = np.nan
-							else: frand['%d' % nr][i, bad] = np.nan
-					if do_sclip:
-						stds = np.nanstd(frand['%d' % nr], 0)
-						high_sigma = np.abs(frand['%d' % nr]) > nsigma * stds
-						frand['%d' % nr][high_sigma] = np.nan
-					#frand['%d' % nr] = sclipping(np.array(frand['%d' % nr]), nsig, mask=bad)
-					fr_mean = np.nanmean(frand['%d' % nr], 0)
-					if ptype=='snr': zlr, ylr, xlr = fr_mean.shape
-					else: ylr, xlr = fr_mean.shape
-
-			zlm, ylm, xlm = fmuse.shape
+		zlm, ylm, xlm = fmuse.shape
+		zlm0 = zlm
+		if do_rand: zlr, ylr, xlr = fr_mean.shape
 
 		if ptype == 'snr':
 			fout = open('UVB.dat', 'w')
@@ -1909,10 +2064,10 @@ if snr:
 				fin = np.nanmean(_fmuse, 1)
 				if do_rand:
 					inside_rand = (cr >= rm[0] ** 2) & (cr < rm[1] ** 2)
-					fr = fr_mean[inside_rand]
-					fr = np.nanmean(fr)
+					fr = fr_mean[:, inside_rand]
+					fr = np.nansum(fr)
 					fstd = []
-					for nr in range(nrand): fstd.append(np.nanmean(frand['%d' % nr][:, inside_rand]))
+					for nr in range(nrand): fstd.append(np.nansum(np.nanmean(frand['%d' % nr][:, inside_rand], 1)))
 					fstd = np.nanstd(fstd)
 				fe, fe_std, fy = None, None, None
 
@@ -1939,16 +2094,18 @@ if snr:
 						lbs = [None, None, None]
 				_fin.append(fin)
 				_fe.append(fe)
-				_fstd.append(fstd)
 				_fe_std.append(fe_std)
 				_fy.append(fy)
-				_fr.append(fr)
+				if do_rand:
+					_fstd.append(fstd)
+					_fr.append(fr)
 			_fin = np.array(_fin)
 			_fe = np.array(_fe)
-			_fstd = np.array(_fstd)
 			_fe_std = np.array(_fe_std)
 			_fy = np.array(_fy)
-			_fr = np.array(_fr)
+			if do_rand:
+				_fr = np.array(_fr)
+				_fstd = np.array(_fstd)
 
 			if do_spectra:
 				nrad = len(rads)
@@ -1961,7 +2118,7 @@ if snr:
 					r = rads[i]
 
 					f = _fin[i][zmin: zmax]# - _fr[i]
-					fstd = _fstd[i]
+					if do_rand: fstd = _fstd[i]
 					ax.plot(v[zmin: zmax], f*flux2sb)
 					#ax.plot(v[zmin: zmax], [2*fstd*flux2sb]*len(f), label=r'2$\sigma$ noise level')
 					ax.plot(v[zmin: zmax], [0]*len(f), color='gray')
@@ -1970,9 +2127,9 @@ if snr:
 					plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
 					plt.grid()
 
-					ax2 = ax.twinx()
-					ax2.plot(v[zmin: zmax], f/fstd, alpha=0)
-					plt.ylabel(r'SNR')
+					#ax2 = ax.twinx()
+					#ax2.plot(v[zmin: zmax], f/fstd, alpha=0)
+					#plt.ylabel(r'SNR')
 
 					plt.savefig('../../Figures/SB_spectra%s_r%d-%d_zw%d%s%s%s.png' % (scat, r[0], r[1], zw, '_mask'*do_mask, sspec, extraname))
 					# plt.show()
@@ -1985,8 +2142,8 @@ if snr:
 				plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
 				for i in nr[1:]:
 					r = rads[i]
-					f = _fin[i][zmin: zmax] - _fr[i]
-					fstd = _fstd[i]
+					f = _fin[i][zmin: zmax]# - _fr[i]
+					if do_rand: fstd = _fstd[i]
 					ax.plot(v[zmin: zmax], f*flux2sb, label='%d < r < %d arcsec' % (r[0], r[1]))
 				plt.legend()
 				plt.grid()
@@ -2018,8 +2175,8 @@ if snr:
 				ax.scatter(rm, _y, c='black', marker='.', s=15, label=r'2$\sigma$ noise level')
 				plt.fill_between(rm, _ymin, list(_y), facecolor='black', alpha=0.3, lw=0, edgecolor='none')
 
-				plt.xlim(5, 27)
-				plt.ylim(-.2, 2)
+				plt.xlim(2, 50)
+				#plt.ylim(-.2, 2)
 				plt.xlabel('distance [arcsec]')
 				plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg/s/cm^2/arcsec^2]}}$')
 				plt.legend()

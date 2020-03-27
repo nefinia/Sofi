@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-import astropy.io.fits as fits  #
-from astropy import wcs
 from math import pi, atan2
-from pyfits import getdata, Column, ColDefs, BinTableHDU
 from sys import argv
 
+import astropy.io.fits as fits  #
 import numpy as np
+from astropy import wcs
+from pyfits import getdata, Column, ColDefs, BinTableHDU
 
 from tools_sofi import distance, rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
 
@@ -139,11 +139,11 @@ if fitcat == 'mosaic':
 	l[np.isnan(l)] = 0
 
 if fitcat == 'EAGLE':
+	import params
 	ids = data['ID']
-
-	lcube = 4096
-	coml = 25  # cMpc
-	com2pix = 163.84
+	lcube = params.lcube
+	coml = params.coml  # cMpc
+	com2pix = params.com2pix
 	comx = data['x']
 	comy = data['y']
 	comz = data['z']
@@ -161,12 +161,9 @@ if fitcat == 'EAGLE':
 	# kpc2arcsec = 0.12750223128904756 # 7.843  pkpc per arcsec
 	# pix2kpc= 6.103515625 #~6 kpc per pixel
 	pix2kpc = coml * 1000 / float(lcube)
-	if snap == 15: sred, asec2kpc, nz = [2.012, 8.516, 16]
-	if snap == 14: sred, asec2kpc, nz = [2.237, 8.396, 18]
-	if snap == 13: sred, asec2kpc, nz = [2.478, 8.241, 20]
-	if snap == 12: sred, asec2kpc, nz = [3.017, 7.842, 25]
-	if snap == 11: sred, asec2kpc, nz = [3.528, 7.449, 29]
-	if snap == 10: sred, asec2kpc, nz = [3.984, 7.108, 34]
+	asec2kpc = params.asec2kpcs['%d' % snap]
+	sred = params.redshifts['%d' % snap]
+	nz = params.zlens['%d' % snap]
 	pix2deg = pix2kpc / asec2kpc / (1 + sred) / 3600.  # initial units were comoving and so 1/(1+z) should be used
 
 ngal = len(ids)
@@ -180,7 +177,7 @@ n5ds = np.zeros(ngal)
 
 if fitcat == 'EAGLE':
 	unames = ('com_dist angx angy angz shearx sheary shearz thetax thetay thetaz xt yt zt').split()
-	dnames = ('id x y z vx vy vz U G R I Z Y J H K gas_mass DM_mass size stellar_mass xc yc zc').split()
+	dnames = ('id x y z vx vy vz U G R I Z Y J H K gass_mass DM_mass stellar_mass xc yc zc').split()
 
 else:
 	unames = ('theta proj_pdist proj_cdist pi_Mpc pi_v redshift com_dist angle shear').split()

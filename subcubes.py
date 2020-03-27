@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 __author__ = 'nefinia'
 
-import h5py
 import os
 import time
-from pyfits import getdata, PrimaryHDU
 from sys import argv
 
+import h5py
 import numpy as np
+from pyfits import getdata, PrimaryHDU
 
 
 def rdarg(argv, key, type=None, default=None, listtype=int):

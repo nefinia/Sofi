@@ -1,15 +1,103 @@
 #!/usr/bin/env python
 import os
-# from pylab import *
-import scipy.ndimage as ndimage
 import time
 from math import *
 from math import sqrt
+
+import numpy as np
+# from pylab import *
+import scipy.ndimage as ndimage
 from pyfits import getdata, PrimaryHDU
 from scipy import integrate
 
-import numpy as np
+import params
 
+
+def dndx(fits, z, dz, len, dzmin=5e-3):
+	cube = getdata(fits)
+	lx, ly, lz = cube.shape
+	dxdz = (1. + z) ** 2 / sqrt(params.omega_m * (1 + z) ** 3 + params.omega_l)
+	lls = np.arange(15, 22.6, .25)
+	dndx, dndz, cddf = [[], [], []]
+	zw = int(dz/dzmin)
+	zn = lz / zw
+	if zw == 1:
+		_c = cube
+	else:
+		_c = []
+		for i in range(zn): _c.append(np.sum(cube[i:i + zw, :, :], 0))
+		_c = np.array(_c)
+	lognhi = np.log10(_c)
+	
+	for i in range(len(lls) - 1):
+		cool = (lognhi >= lls[i]) & (lognhi < lls[i + 1])
+		dNHI = float(10. ** lls[i + 1] - 10 ** lls[i])
+		scool = np.mean(cool) * zn
+		_dndz = scool / dz
+		_dndx = _dndz / dxdz
+		_cddf = _dndx / dNHI
+		print 'NHI %.2f %.2f' % (lls[i], lls[i + 1]), 'dndz', _dndz, 'cddf', _cddf, 'dndx', _dndx
+		dndx.append(_dndx)
+		dndz.append(_dndz)
+		cddf.append(_cddf)
+	return dndx, dndz, cddf
+
+def dndz(fits, dz, nhi=17.5): return np.mean(getdata(fits) >= 10**nhi) / dz
+
+	
+def UVBcalc(z,T4=2,case='B'):
+	def p_lya(case):
+		# T4 is Temperature/1e4K, taken from Cantalupo+08
+		if case == 'A': return .41 - .165 * np.log10(T4) - .015 * np.power(T4, -.44)
+		if case == 'B': return .686 - .106 * np.log10(T4) - .009 * np.power(T4, -.44)
+	def sigma(v):
+		x = 3.041e-16 * v  # h*1Hz/13.6eV * v
+		return 1.34 / x ** 2.99 - .34 / x ** 3.99
+
+	ethick = p_lya(case)
+	ethin = .42#p_lya('A')
+	h = 6.62e-27
+	#c = 2.998e10
+	# lya_rest = 1215.67
+	data = getdata('../../UVB/UVB_spec.fits', 1)
+	wav = data['wavelength']
+	nu = 2.998e18 / wav
+	reds = np.loadtxt('../../UVB/redshift_cuba.dat')
+
+	p0 = max(0, max(np.where(z > reds)[0]))
+	p1 = min(len(reds) - 1, min(np.where(z < reds)[0]))
+	wmin = 200
+	wmax = 912
+	cool = np.where((wav >= wmin) & (wav <= wmax))[0]
+	ncool = len(cool)
+	m = (z - reds[p0]) / (reds[p1] - reds[p0])
+	J = data['col%d' % (p0 + 2)] * (1 - m) + data[
+		'col%d' % (p1 + 2)] * m  # type: Union[int, Any] # +2 since J columns start from #2
+	suma = 0
+	suma2 = 0
+	suma3 = 0
+	for i in range(ncool - 1):
+		k0, k1 = [cool[i], cool[i + 1]]
+		_J = (J[k0] + J[k1]) / 2.
+		v0 = nu[k0]
+		v1 = nu[k1]
+		v = (v0 + v1) / 2.
+		dv = v0 - v1
+		_suma = _J / v * dv
+		suma += _suma
+		suma2 += _suma * sigma(v)
+		suma3 += sigma(v) * dv
+	R_HM12 = suma / h
+	Rthin_HM12 = suma2 *1e-18/ h
+	factor = ethick * 3.8397e-22 / (1. + z) ** 4
+	# 3.8397e-22: result of 4 pi^2*c*h/(1215.67 angstrom)/(360*60*60)^2 in ergs
+	SB_HM12 = R_HM12 * factor
+	sigma0 = 6.3e-18 # for HI
+	gamma_HM12 = sigma0 * 4 * np.pi * suma2 / h
+
+	#print 'For HM12: Lya emission rate', R_HM12, 'SB', SB, 'Photoinization rate', gamma_HM12
+	#print 'mean sigma', suma3*sigma0/(nu[cool[0]]-nu[cool[-1]]), 'integral division', gamma_HM12/R_HM12
+	return R_HM12, Rthin_HM12, SB_HM12, gamma_HM12
 
 def deg2hms(ra, dec):
 	ra_h = int(ra / 15)

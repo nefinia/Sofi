@@ -1,14 +1,18 @@
 #!/usr/bin/env python
 __author__ = 'nefinia'
 
-from pyfits import getdata
+import os
+import subprocess
+import time
+from math import *
+from random import randrange, randint, random, choice
+from sys import argv
+
 import h5py
 import numpy as np
-import os, subprocess, time
-from math import *
+from pyfits import getdata
+
 from tools_sofi import rdarg
-from random import randrange, uniform, randint, random, choice
-from sys import argv
 
 
 def b2s(s):

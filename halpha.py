@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 from copy import copy
-from pyfits import getdata, PrimaryHDU
-from scipy import integrate
 
 import numpy as np
+from pyfits import getdata, PrimaryHDU
+from scipy import integrate
 
 
 def mean_sclip(flux, stds=None, nsigma=4, iterations=6):
@@ -34,7 +34,7 @@ def angdist(z, h0=69.6, omega_l=0.714):
 
     return dh * dm[0] / (1 + z)
 
-cubefolder = '/net/astrogate/export/astrodata/gallegos/'
+cubefolder = '/net/galaxy-data/export/galaxydata/gallegos/'
 fitcat = 'mosaic'
 zmin = 1400
 zw = 10
@@ -136,6 +136,7 @@ flux_median = {}
 flux_std = {}
 nz = 2*zw+1
 lines = ['HALPHA', 'HBETA', 'HGAMMA', 'HDELTA']
+lines = ['HGAMMA']
 for line in lines:#[lines[2]]:
     print 'Computing radial profile for %s,' % line,
     wav = wavelength[line]

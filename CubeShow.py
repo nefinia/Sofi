@@ -1,9 +1,9 @@
 __author__ = 'gallegos'
 
-import numpy as np
-import os
-from pyfits import getdata
 from sys import argv
+
+import numpy as np
+from pyfits import getdata
 
 
 def rdarg(argv, key, type=None, default=None, listtype=int):

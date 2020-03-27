@@ -13,6 +13,7 @@ from scipy.stats import norm
 import matplotlib.pyplot as plt
 from astropy.io import fits
 from tools_sofi import rdarg, sclipping
+import params
 
 fitcat = rdarg(argv, key='fitcat', type=str, default='all')  # 'all'#'HDFS'
 folder = rdarg(argv, 'folder', str, '../../')  # '/scratch/gallegos/MUSE/'
@@ -1670,8 +1671,27 @@ if hm:
 		if case == 'A': return .41 - .165 * np.log10(T4) - .015 * np.power(T4, -.44)
 		if case == 'B': return .686 - .106 * np.log10(T4) - .009 * np.power(T4, -.44)
 
+	gamma_bkg = {}
 
-	def calc(z):
+	gamma_bkg['HM12'] = {'7': [3.60E-13, 2.14E-13, 3.23E-18],
+						 '8': [4.26E-13, 2.45E-13, 1.33E-17],
+						 '9': [4.86E-13, 2.81E-13, 5.60E-17],
+						 '10': [5.71E-13, 3.28E-13, 2.31E-16],
+						 '11': [6.77E-13, 3.89E-13, 8.70E-16],
+						 '12': [7.66E-13, 4.42E-13, 2.10E-15],
+						 '13': [9.50E-13, 5.55E-13, 9.06E-15],
+						 '14': [9.64E-13, 5.67E-13, 1.13E-14]}
+
+	gamma_bkg['HM01'] = {'7': [3.60E-13, 2.14E-13, 3.23E-18],
+						 '8': [.6E-12, 2.45E-13, 1.33E-17],
+						 '9': [.7E-12, 2.81E-13, 5.60E-17],
+						 '10': [.9E-12, 3.28E-13, 2.31E-16],
+						 '11': [1E-12, 3.89E-13, 8.70E-16],
+						 '12': [1.5E-12, 4.42E-13, 2.10E-15],
+						 '13': [1.7E-12, 5.55E-13, 9.06E-15],
+						 '14': [1.9E-12, 5.67E-13, 1.13E-14]}
+
+	def calc(z, snap):
 		p0 = max(0, max(np.where(z > reds)[0]))
 		p1 = min(len(reds) - 1, min(np.where(z < reds)[0]))
 		wmin = 200
@@ -1682,29 +1702,64 @@ if hm:
 		J = data['col%d' % (p0 + 2)] * (1 - m) + data[
 			'col%d' % (p1 + 2)] * m  # type: Union[int, Any] # +2 since J columns start from #2
 		suma = 0
+		suma2 = 0
+		def sigma(v):
+			x = 3.041e-16*v#h*1Hz/13.6eV * v
+			return 1.34/x**2.99-.34/x**3.99
+			#return (v*3.041e-16)**-3
+
 		for i in range(ncool - 1):
 			k0, k1 = [cool[i], cool[i + 1]]
-			suma += (J[k0] / wav[k0] + J[k1] / wav[k1]) / 2 * (wav[k1] - wav[k0])
-		R_HM12 = et / h * suma
-		factor = 3.8397e-22 / (1. + z) ** 4
-		# factor: result of 4 pi^2*c*h/(1215.67 angstrom)/(360*60*60)^2 in ergs
-		print 'redshift', z, 'SB', R_HM12 * factor
+			_J = (J[k0] + J[k1])/2.
+			v0 = nu[k0]
+			v1 = nu[k1]
+			v = (v0+v1)/2.
+			dv = v0-v1
+			_suma = _J / v * dv
+			suma += _suma
+			suma2 += _suma * sigma(v)
+		R_HM12 = suma / h
+		sigma0 = 6.3e-18 # for HI
+		gamma_HM12 = sigma0 * 4 * np.pi * suma2 / h
+
+		#wmin = 100
+		#wmax = 1e10
+
+
+		factor = et * 3.8397e-22 / (1. + z) ** 4
+		#div = gamma_bkg['HM12'][snap][0]*1e16/R_HM12
+		# factor: result of 4 pi^2*c*h/(1215.67 angstrom)/(360*60*60)^2 in ergs and times et
+		#print 'redshift', z, 'div', div, 'Gamma HM12 integral', gamma_HM12, 'Gamma_HM12 paper', gamma_bkg['HM12'][snap][0], 'R_HM12', R_HM12, 'SB', R_HM12 * factor
+		print 'redshift', z, 'Gamma HM12 integral', gamma_HM12, 'R_HM12', R_HM12, 'SB', R_HM12 * factor
+		#return z, R_HM12, gamma_bkg['HM01'][snap][0]*1e16, gamma_bkg['HM12'][snap][0]*1e16
+
+
 
 	# how many photons are coverted into lya
 	et = p_lya()
 	h = 6.62e-27
-	# c = 2.998e10
+	#c = 2.998e10
 	# lya_rest = 1215.67
-	data = getdata('../../UVB_spec.fits', 1)
+	data = getdata('../../UVB/UVB_spec.fits', 1)
 	wav = data['wavelength']
-	dw = wav
-	reds = np.loadtxt('../../redshift_cuba.dat')
-	calc(3.984)
-	calc(3.528)
-	calc(3.017)
-	calc(2.478)
-	calc(2.237)
-	calc(2.012)
+	nu = 2.998e18 / wav
+	reds = np.loadtxt('../../UVB/redshift_cuba.dat')
+	a = []
+	redshifts = params.redshifts
+	for s in np.arange(6, 15).astype(str):
+		print s
+		a.append(calc(redshifts[s], s))
+	a = np.array(a).T
+	if 0:
+		import matplotlib.pyplot as plt
+		plt.figure()
+		plt.plot(a[0], a[1], label='rm12')
+		plt.plot(a[0], a[2], label='hm01')
+		plt.plot(a[0], a[3], label='hm12')
+		plt.legend()
+		plt.savefig('../../UVB/UVB_models.png')
+		plt.close()
+
 
 	if 0:
 		a = np.loadtxt('../../cuba_madau.dat')
