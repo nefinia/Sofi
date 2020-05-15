@@ -161,9 +161,9 @@ if fitcat == 'EAGLE':
 	# kpc2arcsec = 0.12750223128904756 # 7.843  pkpc per arcsec
 	# pix2kpc= 6.103515625 #~6 kpc per pixel
 	pix2kpc = coml * 1000 / float(lcube)
-	asec2kpc = params.asec2kpcs['%d' % snap]
-	sred = params.redshifts['%d' % snap]
-	nz = params.zlens['%d' % snap]
+	asec2kpc = params.asec2kpcs[snap]
+	sred = params.redshifts[snap]
+	nz = params.zlens[snap]
 	pix2deg = pix2kpc / asec2kpc / (1 + sred) / 3600.  # initial units were comoving and so 1/(1+z) should be used
 
 ngal = len(ids)

@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import os
-import params
 from sys import argv
 
 import astropy.io.fits as fits
@@ -11,6 +10,7 @@ import scipy.signal as sp
 from astropy import wcs
 from pyfits import getdata, PrimaryHDU
 
+import params
 from tools_sofi import rdarg
 
 
@@ -41,22 +41,25 @@ pairs = []
 makeim = rdarg(argv, 'makeim', bool, False)
 makefit = rdarg(argv, 'makefit', bool, True)
 mask = rdarg(argv, 'mask', bool, False)
+mask2d = rdarg(argv, 'mask2d', bool, False)
 gmask = rdarg(argv, 'gmask', bool, False)
-model = rdarg(argv, 'model', str, 'HM01')
+model = rdarg(argv, 'model', str, 'HM12')
 offset = rdarg(argv, 'offset', bool, False)
 centerfix = rdarg(argv, 'centerfix', bool, False)
 cubex = rdarg(argv, 'cubex', bool, False)
 corr = rdarg(argv, 'corr', bool, False)
 scorr = '.corr' * corr
 fitcat = rdarg(argv, key='fitcat', type=str, default='HDFS')  # 'UDF
-folder = rdarg(argv, key='folder', type=str, default='/net/galaxy-data/export/galaxydata/gallegos/')#''
-foldercat = rdarg(argv, key='folder', type=str, default='../../')
-folderout = rdarg(argv, key='folder', type=str, default='../../')
+folder = rdarg(argv, key='folder', type=str, default='/net/eos/scratch/gallegos/')#'/net/galaxy-data/export/galaxydata/gallegos/')#''
+foldercat = rdarg(argv, key='foldercat', type=str, default='../../')
+folderout = rdarg(argv, key='folderout', type=str, default='../../')
 extraname = rdarg(argv, key='extraname', type=str, default='')
 csub = rdarg(argv, 'csub', bool, True)
+scsub = '.csub' * csub
 single = rdarg(argv, 'single', bool, False)
 id0 = rdarg(argv, 'id', int, 1)
-galrad = rdarg(argv, 'rad', int, 6)
+galrad = rdarg(argv, 'rad', int, 3)
+zw0 = rdarg(argv, 'zw0', int, 5)
 smooth = rdarg(argv, 'smooth', int, 0)
 
 if smooth:
@@ -76,7 +79,7 @@ snap = rdarg(argv, 'snap', int, 12)
 
 verbose = rdarg(argv, 'verbose', int, 1)
 ext = '.fits'
-scsub = '.csub' * csub
+
 if verbose < 2:
 	vb = ' > /dev/null 2>&1'
 else:
@@ -85,7 +88,7 @@ else:
 dovar = True
 xw = rdarg(argv, 'xw', int, 200)  # for EAGLE it was last time 500 (15.10.18)
 yw = rdarg(argv, 'yw', int, 200)  # for EAGLE it was last time 500 (15.10.18)
-zw = rdarg(argv, 'zw', int, 100)
+zw = rdarg(argv, 'zw', int, 200)
 vmin = rdarg(argv, 'vmin', float, -.5)
 vmax = rdarg(argv, 'vmax', float, 1)
 std = rdarg(argv, 'std', float, None)
@@ -113,19 +116,18 @@ if fitcat == 'EAGLE':
 
 	#cubename = 'snap%s_%s_%s_512_4096_8_%d_%s_%.2E%s.%s.fits' % (snap, coord, model, params.zlens[str(snap)],
 	#														_sgamma, params.nhSS[model][str(snap)], scase, type)
-	cubename = 'snap%s_%s_%s_512_4096_%d.%s.fits' % (snap, coord, model, params.zlens[str(snap)], type)
-	cubename = 'snap%s_%s.%s.fits' % (snap, coord, type)
+	cubename = 'snap%s_%s_%s_512_4096_12_%d_6.73E-03_CaseA.%s.fits' % (snap, coord, model, params.zlens[snap], type)
 
 	if mask: maskname = 'snap%s_%s.mask.fits' % (snap, coord)
 	if gmask:
-		gmaskname = 'snap%s_%s.galmask_%darcsec.fits' % (snap, coord, galrad)
+		gmaskname = 'snap%s_%s.galmask_%darcsec_zw%d.fits' % (snap, coord, galrad, zw0)
 	nconf = 1
 
 if fitcat == 'HDFS':
 	#cubename = 'DATACUBE-HDFS-1.35-PROPVAR%s.fits' % '.csub' * csub
 	cubename = 'DATACUBE-HDFS-1.35-PROPVAR%s%s.fits' % (scsub, scorr)
-	if mask: maskname = 'DATACUBE-HDFS-1.35-PROPVAR.IM.Objects_Id.fits'
-	if gmask: gmaskname = 'HDFS.galmask_%darcsec.fits' % galrad
+	if mask2d: mask2dname = 'DATACUBE-HDFS-1.35-PROPVAR.IM.Objects_Id.fits'
+	if gmask: gmaskname = 'HDFS.galmask_%darcsec_zw%d.fits' % (galrad, zw)
 	if dovar:
 		varname = 'DATACUBE-HDFS-1.35-PROPVAR.fits'
 	if mask: maskname = 'DATACUBE-HDFS-1.35-PROPVAR.Objects_Id.fits'
@@ -135,22 +137,24 @@ if fitcat == 'UDF':
 	#cubename = 'UDF.bkgcorr%s.fits' % '.csub' * csub
 	#cubename = 'UDF10.z1300%s.fits' % '.csub' * csub
 	#cubename = 'DATACUBE_UDF-10%s.fits' % '.csub' * csub
-	if gmask: gmaskname = 'UDF.galmask_%darcsec.fits' % galrad
+	if gmask: gmaskname = 'UDF.galmask_%darcsec_zw%d.fits' % (galrad, zw0)
 	cubename = 'DATACUBE_UDF-10%s%s.fits' % (scsub, scorr)
 	print cubename
-	hname = '%s/%s/%s' % (folder, fitcat, 'DATACUBE_UDF-10.fits')
+	hname = '%s/%s/%s' % ('/net/galaxy-data/export/galaxydata/gallegos/', fitcat, 'DATACUBE_UDF-10.fits')
 	if mask: maskname = 'DATACUBE_UDF-10.Objects_Id.fits'
+	if mask2d: mask2dname = 'DATACUBE_UDF-10.IM.Objects_Id.fits'
 	nconf = 1
 
 if fitcat == 'MXDF':
 	#cubename = 'UDF.bkgcorr%s.fits' % '.csub' * csub
 	#cubename = 'UDF10.z1300%s.fits' % '.csub' * csub
 	#cubename = 'DATACUBE_UDF-10%s.fits' % '.csub' * csub
-	if gmask: gmaskname = 'MXDF.galmask_%darcsec.fits' % galrad
-	cubename = 'MXDF.bkgcorr.csub.fits'# % (scsub, scorr)
-	hname = '%s/%s/MXDF_DATACUBE_FINAL_PROPVAR.csub.fits' % (folder, fitcat)
+	if gmask: gmaskname = 'MXDF.galmask_%darcsec_zw%d.fits' % (galrad, zw0)
+	cubename = 'DATACUBE_MXDF_ZAP_COR%s%s.fits' % (scsub, scorr)
+	hname = '%s/%s/DATACUBE_MXDF_ZAP_COR.csub.fits' % (folder, fitcat)
 	print cubename
-	if mask: maskname = 'MXDF_DATACUBE_FINAL_PROPVAR.Objects_Id.fits'
+	if mask: maskname = 'DATACUBE_MXDF_ZAP_COR.mask.fits'
+	if mask2d: mask2dname = 'DATACUBE_MXDF_ZAP_COR.IM.Objects_Id.fits'
 	nconf = 1
 
 if fitcat == 'mosaic' or fitcat == 'mosaic10':
@@ -159,9 +163,10 @@ if fitcat == 'mosaic' or fitcat == 'mosaic10':
 	#cubename = 'mosaic.bkgcorr%s.fits' % '.csub' * csub
 	#cubename = 'DATACUBE_UDF-MOSAIC.z1300%s.corr.fits' % scsub
 	cubename = 'DATACUBE_UDF-MOSAIC%s%s.fits' % (scsub, scorr)
-	hname = '%s/%s/%s' % (folder, fitcat, 'DATACUBE_UDF-MOSAIC.fits')
+	hname = '%s/%s/%s' % ('/net/galaxy-data/export/galaxydata/gallegos/', fitcat, 'DATACUBE_UDF-MOSAIC.fits')
 	if mask: maskname = 'DATACUBE_UDF-MOSAIC.Objects_Id.fits'
-	if gmask: gmaskname = 'mosaic.galmask_%darcsec.fits' % galrad
+	if mask2d: mask2dname = 'DATACUBE_UDF-MOSAIC.Objects_Id.fits'
+	if gmask: gmaskname = 'mosaic.galmask_%darcsec_zw%d.fits' % (galrad, zw0)
 	nconf = 1
 	vmin = -3
 	vmax = 10
@@ -173,6 +178,8 @@ data_cube = getdata(filename, 0)
 zlim, ylim, xlim = data_cube.shape
 if mask:
 	mcube = getdata('%s/%s/%s' % (folder, fitcat, maskname), 0)
+if mask2d:
+	m2dcube = getdata('%s/%s/%s' % (folder, fitcat, mask2dname), 0)[0]
 if gmask:
 	gcube = getdata('%s/%s/%s' % (folder, fitcat, gmaskname), 0)
 if fitcat == 'HDFS' or fitcat == 'mosaic' or fitcat == 'mosaic10':
@@ -246,49 +253,51 @@ if fitcat == 'UDF' or fitcat == 'mosaic' or fitcat == 'MXDF':
 	dec = data['DEC'][good]
 	redshift = data['Z_MUSE'][good]
 	
-	if 0:
-		if fitcat == 'mosaic' or fitcat == 'MXDF':
-			flya = data['LYALPHA_FLUX_SUM'][good]
-		else:
-			flya = data['LYALPHA_FLUX'][good]
-		wavelength = data['LYALPHA_LBDA_OBS'][good]
 	if offset: off = data['offset'][good]
 	else: off = ids - ids
 
-if hname is None: hname = filename
-
-ttt, header_data_cube = getdata(hname, 0, header=True)  # .replace('.csub', '')
-
-# Removing COMMENT key to avoid problems reading non-ascii characters
-cards = header_data_cube.cards
-bad = ['COMMENT' == b[0] for b in cards]
-for i in range(np.sum(bad)): header_data_cube.remove('COMMENT')
-hdulist = fits.open(filename)
 
 if fitcat != 'EAGLE':
-	w = wcs.WCS(header_data_cube, hdulist)
-	wavelength = 1215.67 * (1+redshift)
-	savecoord = False
+
+	savecoord = True
+	#newcoord = True
+	#if not newcoord:
 	try:
+		print 'Reading x,y,x coordinates!'
 		xs = np.round(data['x'][good]).astype(int)
 		ys = np.round(data['y'][good]).astype(int)
 		zs = np.round(data['z'][good]).astype(int)
 		# & (xs<xlim) & (ys>0) & (ys<ylim) (zs>0) & (zs<zlim)
 	
+	#else:
 	except:
 		print 'No x,y,x coordinates!'
-		savecoord = True
+		if hname is None: hname = filename
+		ttt, header_data_cube = getdata(hname, 0, header=True)  # .replace('.csub', '')
+		# Removing COMMENT key to avoid problems reading non-ascii characters
+		cards = header_data_cube.cards
+		bad = ['COMMENT' == b[0] for b in cards]
+		for i in range(np.sum(bad)): header_data_cube.remove('COMMENT')
+		hdulist = fits.open(filename)
+		wavelength = 1215.67 * (1 + redshift)
 		xs, ys, zs = np.zeros(len(wavelength)), np.zeros(len(wavelength)), np.zeros(len(wavelength))
-	cool = (xs > 0)
-	if fitcat == 'MXDF': xoff, yoff, zoff = 8, 9, 40
+		w = wcs.WCS(header_data_cube, hdulist)
+		_xs, _ys, _zs = np.round(w.all_world2pix(ra, dec, [1] * len(ra), 1)).astype(int)
+		_zs = np.round(l2pix(wavelength)).astype(int)
+		np.savetxt('coords%s.dat' % fitcat, np.mat([ids, _xs, _ys, _zs]).T, header='id x y z',
+		                         fmt='%d %d %d %d')
+		cool = (xs > 0)
+		xs[~cool] = _xs[~cool]
+		ys[~cool] = _ys[~cool]
+		zs[~cool] = np.round(_zs[~cool]).astype(int)
+	
+	xoff, yoff, zoff = 0, 0, 0
+	
+	if fitcat == 'MXDF': xoff, yoff, zoff = 0, 0, 38#30, -43, 83
 	if fitcat == 'UDF' or fitcat == 'HDFS': xoff, yoff, zoff = 0, 0, 0
-	if fitcat == 'mosaic': xoff, yoff, zoff = 0, 0,-1
-	_xs, _ys, _zs = np.round(w.all_world2pix(ra, dec, [1]*len(ra), 1)).astype(int)
-	_zs = np.round(l2pix(wavelength)).astype(int)
-	if savecoord: np.savetxt('coords%s.dat' % fitcat, np.mat([ids, _xs, _ys, _zs]).T, header='id x y z', fmt='%d %d %d %d')
-	xs[~cool] = _xs[~cool]
-	ys[~cool] = _ys[~cool]
-	zs[~cool] = np.round(_zs[~cool]).astype(int)
+	if fitcat == 'mosaic': xoff, yoff, zoff = 0, 0, -1
+
+	
 	xs += xoff
 	ys += yoff
 	zs += zoff
@@ -349,10 +358,22 @@ extraname += '.rand'*random + ('.%s' % line) * (line != 'lya') + scsub + scorr
 print extraname
 fstack = []
 
+sblim=False
+if sblim:
+	if mask:
+		c=np.copy(data_cube)
+		c[mcube>0] = np.nan
+		std = []
+		for j in range(36):
+			cool = c[j:(j + 1) * 100, :, :]
+			for i in range(1000): std.append(np.nansum(np.random.choice(cool, 25)))
+			print 'z', j * 100 - 50, '1sigma SB', np.nanstd(std)
+
 
 for j in range(len(xs[cool])):
 	x, y, z, i = np.array([xs[cool][j], ys[cool][j], zs[cool][j]+off[cool][j], ids[cool][j]]).astype(int)
-
+	print "--------------------"
+	print i, x, y, z
 	# print 'Catalogue values', x, y, z, data_cube[
 	#    int(z - 1), int(y - 1), int(x - 1)]  # , data_cube[z1 - d:z1 + d, y1 - d:y1 + d, x1 - d:x1 + d]
 
@@ -364,6 +385,7 @@ for j in range(len(xs[cool])):
 	else:
 		name = "%s/%s/LAEs/%d%s" % (folderout, fitcat, i, extraname)
 		if mask: mname = "%s/%s/LAEs/%d.mask" % (folderout, fitcat, i)
+		if mask2d: m2dname = "%s/%s/LAEs/%d.mask2d" % (folderout, fitcat, i)
 		if gmask: gname = "%s/%s/LAEs/%d.gmask%d" % (folderout, fitcat, i, galrad)
 		if spec: sname = "%s/%s/LAEs/spec/%d%s" % (folderout, fitcat, i, extraname)
 
@@ -378,11 +400,11 @@ for j in range(len(xs[cool])):
 	
 
 	if overwrite or not isf:
-		print "--------------------"
 		print 'Overwriting' * overwrite * isf, 'New' * (not isf), fitcat, i
 		if makefit: flux = np.zeros([zw + 1, yw + 1, xw + 1]) + float('NaN')
 		if mask: flux2 = np.zeros([zw + 1, yw + 1, xw + 1]) + float('NaN')
 		if gmask: flux3 = np.zeros([zw + 1, yw + 1, xw + 1]) + float('NaN')
+		if mask2d: flux2d = np.zeros([yw + 1, xw + 1]) + float('NaN')
 		if fitcat == 'EAGLE':
 			if mask:
 				roll = np.roll(mcube, (zlim/2-z, ylim/2-y, xlim/2-x), (0, 1))
@@ -422,7 +444,11 @@ for j in range(len(xs[cool])):
 				flux2[dzmin: zw+dzmax+1, dymin: yw+dymax+1, dxmin: xw+dxmax+1] = _cube
 				gid = flux2[zw/2, yw/2, xw/2]
 				flux2[flux2 == gid] = 0
-
+			if mask2d:
+				_cube = np.copy(m2dcube[_ymin: _ymax+1, _xmin: _xmax+1])
+				flux2d[dymin: yw+dymax+1, dxmin: xw+dxmax+1] = _cube
+				gid = flux2d[yw/2, xw/2]
+				flux2d[flux2d == gid] = 0
 			if gmask:
 				_cube = np.copy(gcube[_zmin: _zmax + 1, _ymin: _ymax + 1, _xmin: _xmax + 1])
 				gal = _cube == i
@@ -439,6 +465,9 @@ for j in range(len(xs[cool])):
 		if mask:
 			hdu.data = flux2
 			hdu.writeto(mname+ext, clobber=True)
+		if mask2d:
+			hdu.data = flux2d
+			hdu.writeto(m2dname+ext, clobber=True)
 		if gmask:
 			hdu.data = flux3
 			hdu.writeto(gname+ext, clobber=True)

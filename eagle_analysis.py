@@ -25,7 +25,7 @@ class PhaseDiagram:
         data = {}
 
         # Load data.
-        for att in ['GroupNumber', 'SubGroupNumber', 'Temperature', 'Density', 'StarFormationRate']:
+        for att in ['GroupNumber', 'SubGroupNumber', 'Temperature', 'Density', 'StarFormationRate', '']:
             data[att] = read_dataset(itype, att)
         
         # Mask to selected GroupNumber and SubGroupNumber.

@@ -28,6 +28,7 @@ csub = rdarg(argv, 'csub', bool, True)
 scsub = '.csub'*csub
 halfplot = rdarg(argv, 'halfplot', bool, False)
 extraname = rdarg(argv, 'extraname', str, '')#'HM12')#
+prename = rdarg(argv, 'prename', str, '')#'HM12')#
 galcov = rdarg(argv, 'galcov', bool, False)
 histover = rdarg(argv, 'histover', bool, False)
 LLScubes = rdarg(argv, 'LLScubes', bool, False)
@@ -38,6 +39,7 @@ circlehist = rdarg(argv, 'circlehist', bool, False)
 h2d = rdarg(argv, 'h2d', bool, False)
 kde = rdarg(argv, 'kde', bool, False)
 nhiprof = rdarg(argv, 'nhi', bool, False)
+nconf = rdarg(argv, 'conf', int, 2)
 minres = rdarg(argv, 'minres', int, 512)
 maxres = rdarg(argv, 'maxres', int, 4096)
 npref = rdarg(argv, 'npref', int, 8)
@@ -52,7 +54,9 @@ types = rdarg(argv, 'type', list, ['NHI'], str) #NHtot, f_NHI, NHII
 radprof = rdarg(argv, 'radprof', bool, False)
 lutzmodel = rdarg(argv, 'lutzmodel', bool, False)
 unique = rdarg(argv, 'unique', bool, False)
-mask = rdarg(argv, 'mask', bool, False)
+mask = rdarg(argv, 'mask', bool, True)
+mask2d = rdarg(argv, 'mask2d', bool, True)
+gmask = rdarg(argv, 'gmask', bool, False)
 model = rdarg(argv, 'model', str, 'HM01')#'HM12')#
 do_delaunay = rdarg(argv, 'delaunay', bool, False)
 temperature = rdarg(argv, 'temperature', bool, False)
@@ -78,12 +82,6 @@ nhi_fit['HM01'] = params.nhi_fit['HM01']
 nhi_fit['HM12'] = params.nhi_fit['HM12']
 fLLScorr = params.fLLScorr
 
-cenames = {'10': 'snap10_x.gmasked%d.vcorr.LLS' % (galrad),#'snap10_x.gmasked%d.vcorr.LLS.U_-18.79_-18.23' % (galrad),
-           '11': 'snap11_x.gmasked%d.vcorr.LLS' % (galrad),#.U_-18.33_-17.67
-		   '12': 'snap12_x.gmasked%d.vcorr.LLS' % (galrad),#.U_-17.95_-16.36
-		   '9': 'snap9_x.gmasked%d.vcorr.LLS' % (galrad),#.U_-18.19_-17.02
-		   '8': 'snap8_x.gmasked%d.vcorr.LLS' % (galrad),#.U_-18.36_-17.59
-		   '13': 'snap13_x.gmasked%d.vcorr.LLS' % (galrad)}#.U_-18.39_-17.56
 
 lcube = maxres # 4096
 coml = 25  # cMpc
@@ -107,11 +105,14 @@ def sclipping(fits, nsigma, dim=(0), mask=None):
 	fits[high_sigma] = np.nan
 	return fits
 
-folder = '/net/abnoba/scratch2/gallegos/Research/MUSE/'
-flaes = '/net/galaxy-data/export/galaxy/shared/MUSE/gallegos/'
+#folder = '/net/abnoba/scratch2/gallegos/Research/MUSE/'
+#flaes = '/net/abnoba/scratch2/gallegos/Research/MUSE/'#'/net/galaxy-data/export/galaxy/shared/MUSE/gallegos/'
 
-#folder = '../../'
-#flaes = '../../'
+folder = '../../'
+flaes = '../../'
+
+#folder = '/scratch/gallegos/'
+#flaes = '/scratch/gallegos/'
 
 scat = ''
 for i in fitcat: scat += '_' + i
@@ -120,10 +121,11 @@ nrand = 10
 zw0 = rdarg(argv, 'zw', int, 2)
 zw = 2*zw0+1
 do_eagle = 1
-ov_eagle = False
+ov_eagle = True
 vcorr = 1
-do_mask = 0
-do_gmask = 1
+do_mask = mask
+do_mask2d = mask2d
+do_gmask = gmask
 smask = ('.%smask' % (('g%d' % galrad)*do_gmask))*do_mask
 do_sclip = 1
 nsigma = 3
@@ -135,7 +137,8 @@ zoff = 0
 SB = 1.27  # SB at z=3.5
 
 fontsize = 14
-figsize = (8, 4.5)
+figsize = (7, 4.5)
+vlim = 2500
 
 cmap = get_cmap('gist_rainbow')
 
@@ -147,15 +150,37 @@ flux2sb = 31.25
 
 
 #zprob = [[2.7, 3.6], [3.6, 3.8], [3.8, 4.5], [3.8, 4.8], [4.5, 5.], [4.5, 5.5]]
-zprob = [[2.8, 3.5], [3.2, 3.8], [3.2, 4.2], [3.5, 4.5], [3.8, 5], [4.5, 5.5]]#[2.8, 3.2]
+#zprob = [[2.9, 3.5], [3.2, 3.8], [3.2, 4.2], [3.5, 4.5], [3.8, 5], [4.5, 5.5]]#[2.8, 3.2]
 #zprob = [[4.2, 4.5]]
-protos = [[3.45, 3.5], [3.65, 3.75], [4.5, 4.6]]
+protos = []#[3.45, 3.5], [3.65, 3.75], [4.5, 4.6]]
 #zprob = [[5.12, 5.14]]#, [4.76, 4.78], [3.467, 3.476], [3.687, 3.731], [4.496, 4.53]]
-#zprob = [[3.467, 3.476], [3.687, 3.731], [4.496, 4.53]]
-#protos = []
+zprob = [[3.467, 3.476], [3.687, 3.731], [4.496, 4.53]]
+zprob = [[3.45, 3.5], [3.65, 3.75], [4.45, 4.55]]
+zprob = [[3.65, 3.75]]
+#protos = [[3.467, 3.476], [3.687, 3.731]]#[3.65, 3.75]]#3.687, 3.731]]
 #zprob = [[3.6, 4.6], [3.8, 4.8]]
 #zprob = [[2.8, 3.5], [3.5, 4.2], [4.2, 4.9], [4.9, 5.6]]#[2.8, 3.2]
-zprob = [[2.8, 3.4], [3.4, 4.4], [4.4, 5.4], [5.4, 6.6]]#[2.8, 3.2]
+#zprob = [[2.9, 3.5], [3.5, 4.5], [4.5, 5.], [5, 6]]#[[2.9, 3.5], [3.5, 4.7], [4.7, 6]]#, [5, 6], [5.5, 6.6]]
+#zprob = [[2.9, 4], [4, 5], [5, 6.6]]
+#zprob = [[2.9, 3.5], [3.5, 4.5], [4.5, 5.5]]#[[2.9, 3.5], [3.5, 4.7], [4.7, 6]]#, [5, 6], [5.5, 6.6]]
+
+#last:
+zprob = [[3.4, 4.5]]
+zprob = [[3.4, 4.5], [2.9, 3.4], [4.5, 5.5], [5.5, 6.5]]#[2.8, 3.2]
+protos = [[3.467, 3.476], [3.687, 3.731]]
+
+#zprob = [[4.4, 5.4], [4.5, 5.5]]
+#zprob = [[3.8, 4.6]]
+# all rads probed
+rads = [[0, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 10], [10, 12], [8, 16], [12, 16], [12, 20]]
+# rads for each redshift spectra plot
+rsel = [4, 6], [6, 8], [8, 10], [10, 12], [8, 16], [12, 16], [12, 20]#, [12, 20]  # , [8, 20], [8, 14]
+# rads for each rad spectra plot
+rsel2 = rads#[4, 6], [6, 8], [8, 10], [6, 12], [12, 20], [6, 20], [8, 20]# [12, 20], [6, 20]
+ylim = 1/np.array(rads).astype(float).T[1]
+ylims = np.array([-ylim*2, ylim**1.5*12]).T
+#[-3, 10], [-1, 4], [-.4, .6], [-.3, .4], [-.1, .15], [-.1, .15], [-.1, .15], [-.1, .15]
+
 #zprob = [[2.9, 3.4], [3.4, 4.4], [4.4, 5.4], [5.4, 6.6]]#[2.8, 3.2]
 #zprob = [[4.4, 4.6]]#[2.8, 3.2]
 #zprob = [[4.5, 6.6]]#[2.8, 3.2]
@@ -166,31 +191,32 @@ zprob = [[2.8, 3.4], [3.4, 4.4], [4.4, 5.4], [5.4, 6.6]]#[2.8, 3.2]
 sred = 'z'
 #extraname += '.protocluster'
 
-zlm, ylm, xlm = 101, 201, 201
+extraname += prename
+
+zlm, ylm, xlm = 201, 201, 201
 zrange = np.arange(zlm)
 w = ylm / 2
 zz, yy, xx = np.ogrid[0:zlm, 0:ylm, 0:xlm]
 cm = ((yy - w) ** 2 + (xx - w) ** 2)[0]
 mat = {}
 zrealp = {}
-
-
-odats = ['UVB_zr3.16_UDF_mosaic.csub.corr.g6mask.sclip3_z2.8-3.4_ngal_40_104.dat',
-		 'UVB_zr3.90_UDF_mosaic.csub.corr.g6mask.sclip3_z3.4-4.4_ngal_37_163.dat',
-		 'UVB_zr4.88_UDF_mosaic.csub.corr.g6mask.sclip3_z4.4-5.4_ngal_34_156.dat',
-		 'UVB_zr5.82_UDF_mosaic.csub.corr.g6mask.sclip3_z5.4-6.6_ngal_24_65.dat']
-zreals = [3.16, 3.9, 4.88, 5.82]
-
+ncats = {}
 fsize = 14
-colors2 = 'm', 'darkorange','g'
+colors2 = 'm', 'darkorange', 'g', 'blue', 'black', 'purple', 'red', 'orange', 'gray', 'gold', 'purple', 'brown', 'pink'
+nn = 5
+nnn = zlm/nn
 
-for i in range(4):
+
+
+cenames = {}
+for i in range(6, 15): cenames[i] = 'snap%d_x%s.vcorr.LLS' % (i, ('.gmasked%d' % galrad) * do_gmask)
+
+for i in range(len(zprob)):
+
 
 	_zp = zprob[i]
-	odat = '../../UVB/SNR/'+odats[i]
-	_zreal = zreals[i]
 	zp = (_zp[0]+_zp[1])/2.
-	zrealp['%.2f' % zp] = _zreal
+	zrealp['%.2f' % zp] = zp
 
 
 	wred = _zp[1]-_zp[0]
@@ -225,21 +251,23 @@ for i in range(4):
 			_stackname = '%s/all/simplestacks/stack_%s%s%s%s%s%s.z%.2f-%.2f.fits' % (
 			folder, _fitcat, scsub, smask, sclip, scorr, extraname, _zp[0], _zp[1])
 
-			if do_rand: _randstackname = '../../all/simplestacks/randstack%s%s%s%s%s.%d.fits' % (
-			_fitcat, smask, sclip, scorr, extraname, nr)
+			if do_rand: _randstackname = '%s/all/simplestacks/randstack%s%s%s%s%s.%d.fits' % (
+			folder, _fitcat, smask, sclip, scorr, extraname, nr)
 
-			if do_gmask: _gstackname = '../../all/simplestacks/gstack_%s%s.z%.2f-%.2f.r%d.fits' % (
-			_fitcat, extraname, _zp[0], _zp[1], galrad)
+			if do_gmask: _gstackname = '%s/all/simplestacks/gstack_%s%s.z%.2f-%.2f.r%d.fits' % (
+			folder, _fitcat, extraname, _zp[0], _zp[1], galrad)
 
 			fall = []
 			gall = []
 			print '%s catalog' % _fitcat,
-			cat = getdata('%s/%s/cats/laes.fits' % (folder, _fitcat), 1)
+			cat = getdata('%s/%s/cats/laes%s.fits' % (folder, _fitcat, prename), 1)
 			ids = cat['ID']
-			zs = cat['redshift']
+			try: zs = cat['redshift']
+			except: zs = cat['Z_MUSE']
 			ls = 1215.67 * (1 + zs)
-			sconf = cat['sconf']
-			cool = (sconf >= 2) & (zs < _zp[1]) & (zs > _zp[0])
+			try: sconf = cat['sconf']
+			except: sconf = cat['CONFID']
+			cool = (sconf >= nconf) & (zs < _zp[1]) & (zs > _zp[0])
 			for proto in protos: cool &= ((zs < proto[0])|(zs > proto[1]))
 			if fitcat == 'mosaic':
 				udf10 = cat['IN_UDF10']
@@ -255,7 +283,7 @@ for i in range(4):
 					for nr in range(nrand): frand['%d' % nr] = []
 
 				for i, l in zip(ids[cool], ls[cool]):
-					ffits = flaes + '/%s/LAEs/%d%s%s.fits' % (_fitcat, i, scsub, scorr)
+					ffits = flaes + '/%s/LAEs%s/%d%s%s.fits' % (_fitcat, prename, i, scsub, scorr)
 					if os.path.isfile(ffits):
 						if do_rand:
 							for nr in range(nrand):
@@ -279,35 +307,56 @@ for i in range(4):
 						_fit = fit[:, _yl/2-w: _yl/2+w+1, _xl/2-w: _xl/2+w+1]
 
 						if do_mask:
-							fmask = flaes + '/%s/LAEs/%d.mask.fits' % (_fitcat, i)
+							fmask = flaes + '/%s/LAEs%s/%d.mask.fits' % (_fitcat, prename, i)
 							mit = getdata(fmask)
-							_zl, _yl, _xl = mit.shape
+							#_zl, _yl, _xl = mit.shape
 							#_mit = mit[:, _yl/2-w: _yl/2+w+1, _xl/2-w: _xl/2+w+1]
 							#gid = mit[_zl/2, _yl/2, _xl/2]
 							#mit[mit == gid] == 0
 							bad = mit > 0
 							_fit[bad] = np.nan
 
+						if do_mask2d:
+							fmask2d = flaes + '/%s/LAEs%s/%d.mask2d.fits' % (_fitcat, prename, i)
+							mit2 = getdata(fmask2d)
+							#_yl, _xl = mit2.shape
+							#_mit = mit[:, _yl/2-w: _yl/2+w+1, _xl/2-w: _xl/2+w+1]
+							#gid = mit[_zl/2, _yl/2, _xl/2]
+							#mit[mit == gid] == 0
+							bad = mit2 > 0
+							_fit[:, bad] = np.nan
+
+
 						if do_gmask:
-							fgmask = flaes + '/%s/LAEs/%d.gmask%d.fits' % (_fitcat, i, galrad)
+							fgmask = flaes + '/%s/LAEs%s/%d.gmask%d.fits' % (_fitcat, prename, i, galrad)
 							#out = (np.abs(zlm/2-zz) <= zw0) & (cm > (5*asec2pix_muse)**2)
 							if os.path.isfile(fgmask):
 								git = getdata(fgmask)
 								_zl, _yl, _xl = git.shape
 								#_git = git[:, _yl/2-w: _yl/2+w+1, _xl/2-w: _xl/2+w+1]
-								bad2 = (git > 0)# & out
-								_fit[bad2] = np.nan
-								gall.append(bad2)
+								bad = (git > 0)# & out
+								_fit[bad] = np.nan
+								gall.append(bad)
 							else: print 'No gmask?', fgmask
 
 						bkgcorr = True
 						if bkgcorr:
-							out = ((xx-xlm/2)**2+(yy-ylm/2)**2 > 100**2) & (abs(zz-zlm/2)>10)
-							fout = _fit[out]
+							#out0 = ((xx-xlm/2)**2+(yy-ylm/2)**2 > 100**2) & (zz-zlm/2>30)
+							fout = np.copy(_fit[zlm/2-30: zlm/2+31, :, :], 0)
 							fstd = np.nanstd(fout)
-							fout[abs(fout) > nsigma*fstd] = np.nan
-							bkg = np.nanmean(fout)
+							fout[abs(fout) > nsigma * fstd] = np.nan
+							bkg = np.nanmean(fout, 0)
+							bkg[np.isnan(bkg)] = 0
 							_fit -= bkg
+							
+							if 0:
+								for ll in range(nnn):
+									out = out0 & (zz>=ll*nn) & (zz<=(ll+1)*(nn+2))
+									fout = _fit[out]
+									fstd = np.nanstd(fout)
+									fout[abs(fout) > nsigma*fstd] = np.nan
+									bkg = np.nanmean(fout)
+									if np.isfinite(bkg): _fit[nn*ll: nn*(ll+1)] -= bkg
 
 						_fit = np.array(_fit)
 
@@ -322,6 +371,7 @@ for i in range(4):
 					high_sigma = np.abs(fall) > nsigma * stds
 					fall[high_sigma] = np.nan
 				fm[_fitcat] = np.nanmean(fall, 0)
+
 				hdu.data = fm[_fitcat]
 				hdu.writeto(_stackname, clobber=True)
 				if do_gmask:
@@ -339,6 +389,8 @@ for i in range(4):
 					zlr, ylr, xlr = frand[_fitcat].shape
 			else:
 				fm[_fitcat] = getdata(_stackname)
+				if do_gmask:
+					gm[_fitcat] = getdata(_gstackname)
 				if do_rand:
 					frand[_fitcat] = getdata(_randstackname)
 
@@ -358,6 +410,7 @@ for i in range(4):
 		else: sncat = '_%d' % ncat[fitcat[0]]
 		zrealp['%.2f' % zp] = _zreal
 		sred += '_%.2f' % _zreal
+		ncats['%.2f' % zp] = ncat
 
 		if not os.path.isfile(stackname) or stack:
 			_fits = []
@@ -388,17 +441,20 @@ for i in range(4):
 				gmuse = _g
 		else:
 			fmuse = getdata(stackname)
-			gmuse = getdata(gstackname)
+			if do_gmask: gmuse = getdata(gstackname)
 
 		if do_eagle:
 			rval = np.array(redshifts.values())
+			rvals = np.copy(rval)
+			rvals.sort()
 			rkey = np.array(redshifts.keys())
-			if _zreal > 5: zhi, zlo = 5.037, 4.485
+			if _zreal > rvals[-1]: zhi, zlo = rvals[-1], rvals[-2]
+			elif _zreal < rvals[0]: zhi, zlo = rvals[1], rvals[0]
 			else:
 				zlo = np.amax(rval[rval < _zreal])
 				zhi = np.amin(rval[rval > _zreal])
 			m = (_zreal - zlo) / (zhi - zlo)
-			print m
+			#print m
 			s = [rkey[rval == _ze][0] for _ze in [zlo, zhi]]
 			# cat = [getdata('%s/EAGLE/cats/gals_snap%s.fits' % (folder, _s), 1) for _s in s]
 			_f = [getdata('../../EAGLE/simplestacks/%s.fits' % cenames[_s]) for _s in s]
@@ -417,7 +473,7 @@ for i in range(4):
 			y, x = np.ogrid[0: yle, 0: xle]
 			ce = (x-xle/2.)**2 + (y-yle/2.) ** 2
 			#sb2gfac = .001268 #.677/1.27/4.528**4, for HM12
-			RHM12, SBHM12, gamma_HM12 = UVBcalc(_zreal)
+			RHM12, RHM12thin, SBHM12, gamma_HM12 = UVBcalc(_zreal)
 			sb2gamma = gamma_HM12*1e-8/SBHM12#sb2gfac*(1+_zreal)**4
 			print 'SB to Gamma for z %.3f' % _zreal, sb2gamma
 
@@ -433,7 +489,7 @@ for i in range(4):
 		if not os.path.isfile(odat) or overwrite:
 
 			rw = 6
-			extraname = ''#'.rw%d_zoff-5_5' % rw
+			#extraname = ''#'.rw%d_zoff-5_5' % rw
 
 			#if _fitcat =='mosaic': rmin0, rmax0, rmin1, rmax1 = 0, 100, 10, 200
 			#else: rmin0, rmax0, rmin1, rmax1 = 0, 15, 5, 20
@@ -443,9 +499,8 @@ for i in range(4):
 			#r0 = np.arange(rmin0, rmax0, rmin1-rmin0)
 			#r1 = np.arange(rmin1, rmax1, rmin1-rmin0)
 			#rads = [[0, .3], [0.3, 1], [0, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 12], [12, 20], [6, 20], [20, 30], [8, 20], [8, 16]]
-			rads = [[1, 2], [2, 4], [4, 6], [6, 8], [6, 20]]
 			zoffs = np.arange(-50, 51)
-			zws = [0, 2, 4, 6]
+			zws = [0, 1, 2, 3, 4, 5, 6, 7]
 			g = {}
 			gstd = {}
 			sbstd = {}
@@ -468,7 +523,23 @@ for i in range(4):
 
 				if do_eagle: inside_eagle = (ce >= re0 ** 2) & (ce < re1 ** 2)
 				nin = np.sum(inside_muse)
+				zlayer = 25
+				_zrange = np.concatenate([zrange[5:zlm / 2 - zlayer], zrange[zlm / 2 + zlayer:-5]])
+				nnn = 100
+				if 0:
+					#standard bkn correction for all z bins, using a window of 5 layers
+					_fr = []
+					_zw_ = 5
+					zw_inv = 1. / float(_zw_)
+					for _n in range(nn):
+						fm = fmuse[:, inside_muse][np.random.choice(_zrange, _zw_)]
+						if do_sclip: fm[abs(fm) > nsigma * np.nanstd(fm)] = np.nan
+						_fr.append(np.nansum(np.nanmean(fm, 1))*zw_inv)
+					fr = np.nanmean(_fr)
+					#fstd = np.nanstd(_fr)
+				
 				for _zw in zws:
+					
 					if do_eagle:
 						zmin = max(0, zle/2-_zw)
 						zmax = min(zle, zle/2+_zw+1)
@@ -486,18 +557,18 @@ for i in range(4):
 							fr2 = frand['%d' % nr][:, zlr / 2 - _zw: zlr / 2 + _zw + 1, inside_rand]
 							fstd.append(np.nanmean(np.nansum(np.nanmean(fr2, 2), 1)))
 						fstd = np.nanstd(fstd)
-					else:
+					if 1:#else:
 						_fr = []
-						for _zz in np.concatenate([zrange[_zw:zlm/2-10*_zw], zrange[zlm/2+10*_zw:-_zw]]):
-							zmin = max(0, zlm/2-_zw+_zz)
-							zmax = min(zlm, zlm/2+_zw+_zz+1)
-							fm = fmuse[_zz-_zw: _zz+_zw+1, inside_muse]
-							if do_sclip: fm[abs(fm)>nsigma*np.nanstd(fm)] = np.nan
+						for _n in range(nnn):
+							fm = fmuse[:, inside_muse][np.random.choice(_zrange, 2*_zw+1)]
+							if do_sclip: fm[abs(fm) > nsigma * np.nanstd(fm)] = np.nan
 							_fr.append(np.nansum(np.nanmean(fm, 1)))
 						fr = np.nanmean(_fr)
 						fstd = np.nanstd(_fr)
-
-					noise = fstd*flux2sb
+						factor = 1.
+					else: factor = 2*_zw+1.
+				
+					noise = fstd*flux2sb#*np.sqrt(2*_zw+1)
 					if do_eagle:
 						gamma_uplim = 2*noise*sb2gamma/fe
 						sbhm12 = fe*sbpeak
@@ -510,10 +581,10 @@ for i in range(4):
 						_fmuse = fmuse[zmin: zmax, inside_muse]#-np.nanmean(fmuse[zmin: zmax, far])
 						if do_sclip: _fmuse[abs(_fmuse) > nsigma * np.nanstd(_fmuse)] = np.nan
 
-						fin = np.nansum(np.nanmean(_fmuse, 1))-fr
+						fin = np.nansum(np.nanmean(_fmuse, 1))-fr*factor
 						sb = fin*flux2sb
 						snr = sb/noise
-						sbr = fr*flux2sb
+						sbr = fr*flux2sb*factor
 
 						flls = sb*sb2gamma*1e-12/_gamma12
 						flls_uplim = 2*noise*sb2gamma*1e-12/_gamma12
@@ -526,7 +597,7 @@ for i in range(4):
 							gammac = fyc*sb2gamma
 							mat['%.2f' % zp].append([rr, i, j, _zw, _zoff, sb, noise, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v])
 						else:
-							mat['%.2f' % zp].append([(i+j)/2., i, j, _zw, _zoff, fin*flux2sb, noise, fr*flux2sb])
+							mat['%.2f' % zp].append([(i+j)/2., i, j, _zw, _zoff, sb, noise, sbr])
 
 			mat['%.2f' % zp] = np.array(mat['%.2f' % zp])
 			if do_eagle: header = 'r r0 r1 zw z SB SB_std fcorr fLLS fLLS_uplim Gamma Gamma_uplim SNR SB_rand fEAGLE GammaEAGLE Gamma_uplimEAGLE SB_HM12 v'
@@ -545,15 +616,14 @@ for i in range(4):
 	r, r0, r1, zwi, z, sb, std, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zp].T
 	zmin, zmax = -50, 50
 	#vmin, vmax = 2.99792458e5*zmin*1.25/1215.67/(1+_zreal), 2.99792458e5*zmax*1.25/1215.67/(1+_zreal)
-	vmin, vmax = -2000, 2000
-	rsel = [2, 4], [4, 6], [6, 20]#, [8, 20], [8, 14]
+	vmin, vmax = -vlim, vlim
 	_zw_ = 0
 	i = 0
 	for rr in rsel:
 		c = (zwi==_zw_)&(r0==rr[0])&(r1==rr[1])&(z>=zmin)&(z<=zmax)
-		ax.plot(v[c], sp.savgol_filter(sb[c], 3, 1), label=r"$%d''<r<%d''$" % (rr[0], rr[1]), color=colors2[i])
+		ax.plot(v[c], sp.savgol_filter(sb[c]/1.25, 5, 1), label=r"$%d''<r<%d''$" % (rr[0], rr[1]), color=colors2[i])
 		cout = (zwi == _zw_) & (r0 == rr[0]) & (r1 == rr[1]) & (np.abs(v) > 1000)
-		noise = np.std(sb[cout])
+		noise = np.std(sb[cout]/1.25)
 		print noise
 		ax.errorbar(vmax * (.6 + i * .1), .3, yerr=noise, color=colors2[i], capsize=3)
 		i += 1
@@ -562,21 +632,21 @@ for i in range(4):
 		#ax.plot(z[c]*1.25, [0] * len(r[c]), color='gray')
 		# ax.scatter([0], [1], color='red')
 	plt.xlabel(r'v [$\mathrm{km\,s^{-1}}$]', fontsize=fsize)
-	plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}]}}$', fontsize=fsize)
+	plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}\AA^{-1}]}}$', fontsize=fsize)
 	plt.xlim([vmin, vmax])
-	plt.ylim([-.3, .6])
+	plt.ylim([-.1, .15])
 	plt.xticks(fontsize=fsize-2)
 	plt.yticks(fontsize=fsize-2)
 	plt.legend(prop={"size":fsize})
 	plt.title('z=%.1f' % _zreal, fontsize=fsize)
 	plt.grid()
-
+	plt.tight_layout()
 	# ax2 = ax.twinx()
 	# ax2.plot(v[zmin: zmax], f/fstd, alpha=0)
 	# plt.ylabel(r'SNR')
 
-	plt.savefig('../../Figures/SB_spectra%s_redshift%d_zw%d.pdf' % (
-	scat, _zreal*10, _zw_))
+	plt.savefig('../../Figures/SB_spectra%s_redshift%d_zw%d%s%s.pdf' % (
+	scat, _zreal*10, _zw_, smask, extraname))
 	# plt.show()
 	plt.close()
 
@@ -585,17 +655,15 @@ for i in range(4):
 #zprob = [3.5, 4, 4.5]
 #zprob = [3.72]
 #if fmos: zprob = [3.5, 3.75, 4]
-vlim = 2000
 #rsel = [0, .3], [0.3, 1], [1, 2], [2, 4], [4, 6], [6, 20]
-rsel = [1, 2], [2, 4], [4, 6], [6, 20]
+#rsel = [1, 2], [2, 4], [4, 6], [6, 12], [6, 20]
 #ylims = [[-10, 60], [-5, 30], [-1, 5], [-.4, .6], [-.3, .4], [-.1, .15]]
-ylims = [-1, 4], [-.4, .6], [-.3, .4], [-.1, .15]
 sb620 = []
 std620 = []
-colors = 'blue', 'green', 'gold', 'red'
+colors = 'blue', 'green', 'gold', 'red', 'purple', 'orange', 'black', 'brown', 'pink', 'yellow'
 #colors = 'blue', 'green', 'red'#, 'gold'
 
-for rr, ylim in zip(rsel, ylims):
+for rr, ylim in zip(rsel2, ylims):
 	fig, ax = plt.subplots(figsize=figsize)
 	_zw = 0
 	i = 0
@@ -603,12 +671,13 @@ for rr, ylim in zip(rsel, ylims):
 	for zp in zprob:
 		zpm = (zp[0]+zp[1])/2.
 		_zp = zrealp['%.2f' % zpm]
+		ncat = ncats['%.2f' % zpm]
 		sred += '_%d' % (_zp*10)
 		r, r0, r1, zwi, z, sb, std, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zpm].T
 		c = (zwi == _zw)&(r0 == rr[0])&(r1 == rr[1])&(np.abs(v) <= vlim)
-		ax.plot(v[c], sp.savgol_filter(sb[c], 3, 1), label=r'$z=%.1f$' % _zp, color=colors[i])
+		ax.plot(v[c], sp.savgol_filter(sb[c]/1.25, 5, 1), label=r'$z=%.1f$' % _zp, color=colors[i])
 		cout = (zwi == _zw) & (r0 == rr[0]) & (r1 == rr[1]) & (np.abs(v) > 1000)
-		noise = np.std(sb[cout])
+		noise = np.std(sb[cout]/1.25)
 		print noise
 		ax.errorbar(-vlim*(.9-i*.1), ylim[1]*.5, yerr=noise, color=colors[i], capsize=3)
 		#ax.plot(v[c], sb[c], label=r'$z=%.1f$' % _zp, color=colors[i])
@@ -617,9 +686,13 @@ for rr, ylim in zip(rsel, ylims):
 		#ax.plot(z[c]*1.25, [0] * len(r[c]), color='gray')
 		# ax.scatter([0], [1], color='red')
 		cool = (z==-2) & (zwi==2) & (r0==rr[0]) & (r1==rr[1])
-		print 'z', zp, _zp, '%d<r<%d' % (rr[0], rr[1]), 'SB', sb[cool], 'std', std[cool], 'G', gammac[cool], 'uplim', gamma_uplimc[cool], 'fLLS', fc[cool]
+		print 'z', zp, '%.2f' % _zp, '%d<r<%d' % (rr[0], rr[1]), ncat
+		print 'SB', sb[cool], 'std', std[cool], '\nG', gamma[cool], 'corr', gammac[cool], 'uplim', gamma_uplim[cool],\
+			'corr', gamma_uplimc[cool], '\nfLLS_eagle', fe[cool], \
+			'corr', fc[cool], 'fLLS_muse', flls[cool], 'uplim', flls_uplim[cool]
+		
 	plt.xlabel(r'v [$\mathrm{km\,s^{-1}}$]', fontsize=fsize)
-	plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}]}}$', fontsize=fsize)
+	plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}\AA^{-1}]}}$', fontsize=fsize)
 	plt.xlim([-vlim, vlim])
 	plt.ylim(ylim)
 	plt.xticks(fontsize=fsize-2)
@@ -629,8 +702,10 @@ for rr, ylim in zip(rsel, ylims):
 	elif rr[0] < 1: plt.title('%.1f"<r<%.1f"' % (rr[0], rr[1]))
 	else: plt.title('%d"<r<%d"' % (rr[0], rr[1]), fontsize=fsize)
 	plt.grid()
-	plt.savefig('../../Figures/SB_spectra%s%s_r%d-%d_zw%d.pdf' % (
-		sred, scat, rr[0], rr[1], _zw))
+	plt.tight_layout()
+	plt.savefig('../../Figures/SB_spectra%s%s_r%d-%d_zw%d%s%s.pdf' % (
+		sred, scat, rr[0], rr[1], _zw, smask, extraname))
 	# plt.show()
 	plt.close()
+
 

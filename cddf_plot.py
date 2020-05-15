@@ -32,7 +32,7 @@ kde = rdarg(argv, 'kde', bool, False)
 nhiprof = rdarg(argv, 'nhi', bool, False)
 minres = rdarg(argv, 'minres', int, 512)
 maxres = rdarg(argv, 'maxres', int, 4096)
-npref = rdarg(argv, 'npref', int, 8)
+npref = rdarg(argv, 'npref', int, 12)
 sbhist = rdarg(argv, 'sbhist', bool, False)
 ssthr = rdarg(argv, 'ssthr', float, 1e10)  # 6.73E-3
 sbprof = rdarg(argv, 'sbprof', bool, False)
@@ -141,9 +141,13 @@ mats2 = {}
 
 zw = 1
 
-fdats = ['dndzdx_HM01_snap8_zw1_ssthr5e-02_512_4096_8.NHI.dat',
-		 'dndzdx_HM01_snap14_zw1_ssthr1e-03_512_4096_8.NHI.dat']
-labels = ['z=5 gammax10', 'z=2.2 gammax10']
+fdats = ['dndzdx_HM01_snap8_zw1_ssthr6.73e-03_512_4096_12.NHI.dat',
+         'dndzdx_HM01_snap10_zw1_ssthr6.73e-03_512_4096_12.NHI.dat',
+         'dndzdx_HM01_snap11_zw1_ssthr6.73e-03_512_4096_12.NHI.dat',
+         'dndzdx_HM01_snap12_zw1_ssthr6.73e-03_512_4096_12.NHI.dat']#'dndzdx_HM01_snap8_zw1_ssthr5e-02_512_4096_8.NHI.dat',
+		 #'dndzdx_HM01_snap14_zw1_ssthr1e-03_512_4096_8.NHI.dat',
+		 #'cddf_512_4096_12_7E-03_CaseA.NHI.pdf']
+labels = ['z=5', 'z=4', 'z=3.5', 'z=3']#, 'z=2.2 gammax10']
 ns = len(fdats)
 fig, ax = plt.subplots(1, figsize=(8, 6))
 i = 0
@@ -209,7 +213,7 @@ if 1:
 		 -18.89, -19.23, -19.61, -19.82, -20.25, -20.54, -20.93, -21.31, -21.74, -22.08, -22.46, -22.93, -23.4, -24.09,
 		 -24.77, -25.33, -26.01, -26.57])
 
-	if 0:#nastasha
+	if 1:#nastasha
 		plt.plot(x, y, label=r'Nastasha z=3.5 with SS')
 		dndx = np.sum(10 ** y[26:-1] * (10 ** x[27:] - 10 ** x[26:-1]))
 		dndz = dndx * 4.5 ** 2 / np.sqrt(params.omega_m * 4.5 ** 3 - params.omega_l)
@@ -240,8 +244,12 @@ if 1:
 			 -18.91, -19.19, -19.45, -19.69, -19.95, -20.22, -20.52, -20.9, -21.18, -21.42, -21.65, -21.91, -22.17, -22.49,
 			 -22.77, -23.03, -23.31, -23.72, -24.1, -24.42, -24.84, -25.14, -25.48, -25.81, -26.07, -26.43])
 		plt.plot(x, y, label=r'Ali z=5')
-		dndx = np.sum(10 ** y[9:-1] * (10 ** x[10:] - 10 ** x[9:-1]))
-		dndz = dndx * 6 ** 2 / np.sqrt(params.omega_m * 6 ** 3 - params.omega_l)
+		sqplank = np.sqrt((1-params.planck_omega_l)*6**3-params.planck_omega_l)
+		sqlast = np.sqrt(params.omega_m * 6 ** 3 - params.omega_l)
+		cosmo_rescale = params.H0*sqplank/(params.planck_H0*sqlast)
+		print cosmo_rescale
+		dndx = np.sum(10 ** y[9:-1] * (10 ** x[10:] - 10 ** x[9:-1]))*cosmo_rescale
+		dndz = dndx * 6 ** 2 / sqlast
 		print 'Ali z=5 dndx', dndx, 'dndz', dndz
 
 		x = np.array(
@@ -272,5 +280,5 @@ leg1 = ax.legend(h[:ns], l[:ns], loc='upper right', title='EAGLE')
 leg2 = ax.legend(h[ns:], l[ns:], loc='lower left')
 ax.add_artist(leg1)
 
-plt.savefig('../../Figures/cddf_%d_%d_%d_noSS.pdf' % (minres, maxres, npref))
+plt.savefig('../../Figures/cddf_%d_%d_%d_last.pdf' % (minres, maxres, npref))
 plt.close()

@@ -6,7 +6,6 @@ from math import sqrt
 from sys import argv
 
 # import eagleSqlTools
-import matplotlib.pyplot as plt
 import numpy as np
 import scipy.interpolate as inter
 # from matplotlib.cm import get_cmap
@@ -17,7 +16,7 @@ import params
 from tools_sofi import rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
 
 coordnames = rdarg(argv, 'coord', list, ['x', 'y', 'z'], str)
-snaps = rdarg(argv, 'snap', list, [8, 9, 10, 11, 12, 13, 14], int)
+snaps = rdarg(argv, 'snap', list, [6, 7, 8, 9, 10, 11, 12, 13, 14], int)
 scodes = rdarg(argv, 'scodes', str, '/net/abnoba/scratch2/gallegos/Research/MUSE/codes/Sofi/')
 overwrite = rdarg(argv, 'overwrite', bool, False)
 cubecorr = rdarg(argv, 'cubecorr', bool, False)
@@ -29,10 +28,11 @@ laemask = rdarg(argv, 'laemask', bool, False)
 nhiprof = rdarg(argv, 'nhi', bool, False)
 minres = rdarg(argv, 'minres', int, 512)
 maxres = rdarg(argv, 'maxres', int, 4096)
-model = rdarg(argv, 'model', str, 'HM01')#'HM12')#
+model = rdarg(argv, 'model', str, 'HM12')#'HM01')#
 npref = rdarg(argv, 'npref', int, 12)
-rad = rdarg(argv, 'rad', int, 6)  # arcsec
-_ssthr = rdarg(argv, 'ssthr', float, None)#6.73e-3)# 1e10 or None
+rad = rdarg(argv, 'rad', int, 3)  # arcsec
+zw0 = rdarg(argv, 'zw', int, 5)  # +- zw0 layers for galmask
+_ssthr = rdarg(argv, 'ssthr', float, 6.73e-3)# 1e10 6.73e-3 or None
 sbprof = rdarg(argv, 'sbprof', bool, False)
 snr = rdarg(argv, 'snr', bool, False)
 type = rdarg(argv, 'type', str, 'NHI') #NHtot, f_NHI, NHII
@@ -48,7 +48,7 @@ ssthr = params.nhSS[model]
 if _ssthr is not None:
 	ssthr = {}
 	for snap in snaps:
-		ssthr[str(snap)] = _ssthr
+		ssthr[snap] = _ssthr
 
 dz = params.dz
 sbpeaks = params.sbpeaks
@@ -84,13 +84,13 @@ sb2nhi = inter.interp1d(sb, nhi)
 
 
 #cubefolder = '/net/galaxy-data/export/galaxydata/gallegos/EAGLE/'
-cubefolder = '/scratch/gallegos/EAGLE/'
+cubefolder = '/net/eos/scratch/gallegos/EAGLE/'
 
 do_inter = False
 b = [0, 0, 0, 0, 0]
 brun = rdarg(argv, 'run', list, b, int)
 chombo, init_evol, col_dens, do_layers, do_dndx = brun
-gal_mask, do_nhfrac, do_lls = 0, 0, 0
+gal_mask, do_nhfrac, do_lls = 1, 0, 0
 lmax = int(np.log(maxres / minres) / np.log(2))  # 3 if res 4096, 2 for 2048, 1 for 1024, 0 for 512
 
 hdu = PrimaryHDU()
@@ -114,13 +114,13 @@ _cub = []
 if do_dndx: mats = {}
 for snap in snaps:
 	s = str(snap)
-	saeed = '/scratch/gallegos/EAGLE/'#'/net/galaxy-data/export/galaxydata/saeed/EAGLE/RefL0025N0752/'
+	saeed = '/net/eos/scratch/gallegos/EAGLE/'#'/net/galaxy-data/export/galaxydata/saeed/EAGLE/RecalL0025N0752/'#
 	
 	print 'snapshot', snap
-	red = redshifts[s]
+	red = redshifts[snap]
 	# sbpeak = sbpeaks[snap]
-	asec2kpc = asec2kpcs[s]
-	nl = zlens[s]  # *3
+	asec2kpc = asec2kpcs[snap]
+	nl = zlens[snap]  # *3
 	print nl, 'layers'
 	asec2pix = asec2kpc * (1 + red) * kpc2pix
 	print 'asec2pix', asec2pix
@@ -132,11 +132,11 @@ for snap in snaps:
 	_rad = rad * asec2pix
 	fg = 1.
 	# check lower or upper case E in the scientific notation!!!
-	_sgamma = '%.2E_%.2E_%.2E' % tuple(np.array(gamma_bkg[s]) * fg)
-	_sheat = '%.2E_%.2E_%.2E' % tuple(np.array(heat_bkg[s]) * fg)
-	sgamma = '%.2E %.2E %.2E' % tuple(np.array(gamma_bkg[s]) * fg)
-	sheat = '%.2E %.2E %.2E' % tuple(np.array(heat_bkg[s]) * fg)
-	sname = snames[s]
+	_sgamma = '%.2E_%.2E_%.2E' % tuple(np.array(gamma_bkg[snap]) * fg)
+	_sheat = '%.2E_%.2E_%.2E' % tuple(np.array(heat_bkg[snap]) * fg)
+	sgamma = '%.2E %.2E %.2E' % tuple(np.array(gamma_bkg[snap]) * fg)
+	sheat = '%.2E %.2E %.2E' % tuple(np.array(heat_bkg[snap]) * fg)
+	sname = snames[snap]
 	
 	fname = '%s/snapshot_%s/' % (saeed, sname)
 	if chombo:
@@ -154,13 +154,13 @@ for snap in snaps:
 		print '\n\n\nInit evol'
 		glob.os.chdir(fname + 'init_evol')
 		finit = 'SO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000' % \
-		        (sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase)
+		        (sname, minres, maxres, npref, _sgamma, _sheat, ssthr[snap], scase)
 		if not os.path.isfile(finit) or overwrite:
 			if os.path.isfile(finit):
 				print 'removing init evol file'
 				os.system('rm %s' % finit)
 			srun = './init_evol.sh %d %d %d 25. %.3f "%s" "%s" %.2E' % \
-			       (minres, maxres, npref, red, sgamma, sheat, ssthr[s])
+			       (minres, maxres, npref, red, sgamma, sheat, ssthr[snap])
 			print srun
 			os.system(srun)
 		glob.os.chdir(scodes)
@@ -168,12 +168,12 @@ for snap in snaps:
 		print '\n\n\nColumn density!'
 		glob.os.chdir(fname + 'column_density')
 		finit = '../init_evol/SO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000' % \
-		        (sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase)
+		        (sname, minres, maxres, npref, _sgamma, _sheat, ssthr[snap], scase)
 		if os.path.isfile(finit):
 			nc = 39  # number of cores
 			_s = saeed + '/snapshot_%s/column_density/layers/' % sname
 			_fl = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000_var_%s_proj_%d_lmax_%d_l_' % \
-			      (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase, type, 1, lmax)
+			      (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[snap], scase, type, 1, lmax)
 			isfiles = True
 			for i in range(nl):
 				_file = '%s%d_%d.fits' % (_fl, i + 1, nl)
@@ -188,14 +188,13 @@ for snap in snaps:
 			print '%s 1 um' % finit
 		glob.os.chdir(scodes)
 	
-	sname = snames[s]
+	sname = snames[snap]
 	_s = saeed + '/snapshot_%s/column_density/layers/' % sname
 	
 	for coord, proj in zip(['x'], [1]):  # zip(coordnames, [1, 2, 3]):
 		if gal_mask:
 			cat = getdata('../../EAGLE/cats/gals_snap%d.fits' % snap, 1)
-			zw = 3
-			outname = '%s/snap%s_%s.galmask_%darcsec.fits' % (cubefolder, snap, coord, rad)
+			outname = '%s/snap%s_%s.galmask_%darcsec_zw%d.fits' % (cubefolder, snap, coord, rad, zw0)
 			if not os.path.isfile(outname) or overwrite:
 				mask = np.zeros((nl, lcube, lcube))
 				y, x = np.ogrid[0: lcube, 0: lcube]
@@ -207,19 +206,19 @@ for snap in snaps:
 				for i in np.arange(len(ids))[cool]:
 					print '%d %d %d %d' % (i, ids[i], xc[i], yc[i])
 					gal = ((x - xc[i]) ** 2 + (y - yc[i]) ** 2 < _rad ** 2)
-					mask[zc[i] - zw: zc[i] + zw + 1, gal] = ids[i]
+					mask[zc[i] - zw0: zc[i] + zw0 + 1, gal] = ids[i]
 				hdu.data = mask
 				hdu.writeto(outname, clobber=True)
 		
 		if do_layers:
 			print 'combinig layers!'
 			outname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.%s.fits' % (
-			cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase, type)
+			cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[snap], scase, type)
 			if not os.path.isfile(outname) or overwrite:
 				cubes = []
 				for i in range(nl):
 					flayer = '%sSO.snap_%s_%d_%d_%d_%s_%s_%.2E%s.ts0000_var_%s_proj_%d_lmax_%d_l_%d_%d.fits' % \
-					         (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[s], scase, type, proj, lmax,
+					         (_s, sname, minres, maxres, npref, _sgamma, _sheat, ssthr[snap], scase, type, proj, lmax,
 					          i + 1, nl)
 					cubes.append(getdata(flayer))
 				
@@ -233,14 +232,16 @@ for snap in snaps:
 			
 		if do_nhfrac:
 			cubes = getdata('%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E.%s.fits' %
-			                (cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], type))
+			                (cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[snap], type))
 			logcube = np.log10(cubes)
 			nhis = np.arange(15, 22, .1)
 			cool = (logcube > nhis[0]) & (logcube < nhis[-1])
 			hist, bins = np.histogram(logcube[cool], nhis)
 			sumh = float(np.sum(hist))
 			cumh = [np.sum(hist[i:]) / sumh for i in range(len(hist))]
-			_dndz = np.array(cumh) * nl / dz[s]
+			_dndz = np.array(cumh) * nl / dz[snap]
+			
+			import matplotlib.pyplot as plt
 			
 			plt.figure(figsize=(7, 7))
 			plt.scatter(bins[:-1], np.log10(hist) - bins[:-1])
@@ -248,7 +249,7 @@ for snap in snaps:
 			plt.ylabel('log(f_%s)' % type)
 			# plt.ylim([-4.2, 0.2])
 			plt.savefig('../../EAGLE/%sfrac_%s_%s_%d_%d_%d_%.2E.jpg' %
-			            (type, coord, model, minres, maxres, nl, ssthr[s]))
+			            (type, coord, model, minres, maxres, nl, ssthr[snap]))
 			plt.close()
 		
 		if do_lls:
@@ -261,11 +262,11 @@ for snap in snaps:
 			
 			
 			fnhiname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.NHI.fits' % (
-				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase)
-			fllsname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.LLSnocorr.fits' % (
-				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase)
-			fllsnamecorr = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.LLS.fits' % (
-				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase)
+				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[snap], scase)
+			fllsname = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.LLS.fits' % (
+				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[snap], scase)
+			fllsnamecorr = '%s/snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.LLScorr.fits' % (
+				cubefolder, snap, coord, model, minres, maxres, npref, nl, ssthr[snap], scase)
 			if not os.path.isfile(fllsname) or overwrite:
 				cubes = getdata(fnhiname)
 				_cubes = np.copy(cubes)
@@ -277,17 +278,17 @@ for snap in snaps:
 				hdu.writeto(fllsname, clobber=True)
 				pre = 10
 				lz = l(red, zs, ls, a)
-				dndz0 = np.mean(lls0) * nl / dz[s]
+				dndz0 = np.mean(lls0) * nl / dz[snap]
 				dndz = dndz0
 				diff = dndz / lz
 				# nhi = cubes*lz/dndz
-				# dndz2 = np.mean(nhi>10**llsNHI)*nl/dz[s]
+				# dndz2 = np.mean(nhi>10**llsNHI)*nl/dz[snap]
 				# print 'new dndz', dndz2
 				
 				while abs(diff - 1) > 1e-3:
 					_cubes /= diff
 					lls = _cubes > 10 ** llsNHI
-					dndz = np.mean(lls) * nl / dz[s]
+					dndz = np.mean(lls) * nl / dz[snap]
 					diff = dndz / lz
 					print 'diff', diff, 'dndz', dndz
 					
@@ -309,16 +310,13 @@ for snap in snaps:
 			print 'dndx!'
 			_type = type  # 'NHI'
 			cname = 'snap%d_%s_%s_%d_%d_%d_%d_%.2E%s.%s' % \
-			        (snap, coord, model, minres, maxres, npref, nl, ssthr[s], scase, _type)
-			if _type == 'NHIcorr':
-				cname = 'snap%d_%s_%s_%d_%d_%d.%s' % \
-				        (snap, coord, model, minres, maxres, nl, _type)
+			        (snap, coord, model, minres, maxres, npref, nl, ssthr[snap], scase, _type)
 			cubename = '%s/%s.fits' % (cubefolder, cname)
 			zw = 1  # nl/5
 			print cubename
-			v = 2.99792458e5 * dz[s] * zw / float(nl) / (1 + red)
-			fdat = '../../UVB/dndzdx_%s_snap%s_zw%d_ssthr%.0e_%d_%d_%d.%s.dat' % (
-			model, snap, zw, ssthr[s], minres, maxres, npref, _type)
+			v = 2.99792458e5 * dz[snap] * zw / float(nl) / (1 + red)
+			fdat = '../../UVB/dndzdx_%s_snap%s_zw%d_ssthr%.2e_%d_%d_%d.%s.dat' % (
+			model, snap, zw, ssthr[snap], minres, maxres, npref, _type)
 			if not os.path.isfile(fdat) or overwrite:
 				cubes = getdata(cubename)
 				if type == 'density':
@@ -344,10 +342,10 @@ for snap in snaps:
 					# lpos = np.nanmean(_c[cool])#(10.**_lls[i+1]+10**_lls[i])/2.
 					# if np.isnan(lpos): lpos = 10**_lls[i]
 					scool = np.mean(cool) * zn
-					_dndz = scool / dz[s]
+					_dndz = scool / dz[snap]
 					_dndx = _dndz / dxdz
 					_cddf = _dndx / dNHI
-					print 'NHI %.2f %.2f' % (_lls[i], _lls[i + 1]), 'dndz', _dndz, 'cddf', _cddf, 'dndx', _dndx
+					print 'NHI %.2f %.2f' % (_lls[i], _lls[i + 1]), 'dndz (diff)', _dndz, 'cddf', _cddf, 'dndx', _dndx
 					dndx.append(_dndx)
 					dndz.append(_dndz)
 					cddf.append(_cddf)

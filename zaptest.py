@@ -1,125 +1,64 @@
 import os
+from sys import argv
 
 import numpy as np
+import scipy.interpolate as inter
 from pyfits import getdata, PrimaryHDU
+
+from params import sbpeaks, zlens
+from tools_sofi import rdarg  # , hubblefrom tools_sofi import cic, cubex, makejpeg, astroim,
+
+snaps = rdarg(argv, 'snap', list, [6, 7, 8, 9, 10, 11, 12, 13, 14], int)
+overwrite = rdarg(argv, 'overwrite', bool, False)
 
 hdu = PrimaryHDU()
 f = '../../zap/'
-nrand = 10
-rs = 10.
-sigma_wav = 2.
-halov = True
-nhalo = 100
-fmuse = 'UDF10.zeros.fits'
-fm = getdata(f + fmuse)
-zl, yl, xl = fm.shape
-z, y, x = np.ogrid[0: zl, 0: yl, 0: xl]
+fin = '/net/eos/scratch/gallegos/EAGLE/'
+s = '_x_HM12_512_4096_12_56_6.73E-03_CaseA.LLS.fits'
 
-for nr in range(nrand):
-	fout0 = 'norm.%d.fits' % nr
-	fout1 = 'UDF10.norm.%d.fits' % nr
-	if os.path.isfile(f+fout0):
-		data = getdata(f+fout0)
-	else:
-		data = np.random.normal(size=fm.shape)
-		hdu.data = data
-		hdu.writeto(f+fout0, clobber=True)
-
-	if not os.path.isfile(f+fout1):
-		os.system('CubeArit %s%s + %s%s %s%s' % (f, fmuse, f, fout0, f, fout1))
-
-	fnorm = getdata(f + fout1)
-
-	fhalos = 'halos.%d.fits' % nr
-
-	if os.path.isfile(f+fhalos) and not halov:
-		xs, ys, zs = np.loadtxt('%shalos_rs%d_swav%d.%d.dat' % (f, rs, sigma_wav, nr), dtype=int).T
-		halos = getdata(f + fhalos)
-	else:
-		def prof(p, c, s):
-			return np.exp(-((p[2] - c[2]) / s[2]) ** 2) * \
-				   np.exp(-((p[1] - c[1]) / s[1]) ** 2) * \
-				   np.exp(-(p[0] - c[0]) ** 2 / 2. / s[0] ** 2) / s[0]
+lognhi = [0, 12, 13, 14, 15, 16, 16.5, 17, 17.5, 17.7, 17.8, 18, 18.4, 18.7, 19, 19.4, 19.6, 19.8, 20.1, 20.5, 21,
+		  22, 23, 30]
+nhi = np.power(10, lognhi)
+sb = [0, 0, 0.00001, 0.001, 0.003, 0.03, 0.08, 0.2, 0.45, 0.55, 0.6, 0.7, .8, 0.85, 0.9, 0.938, 0.96,
+	  0.98, 1, 1, 1, 1, 1, 1]
 
 
-		xs = np.random.randint(0, xl, size=nhalo)
-		ys = np.random.randint(0, yl, size=nhalo)
-		zs = np.random.randint(0, zl, size=nhalo)
-		np.savetxt('%shalos_rs%d_swav%d.%d.dat' % (f, rs, sigma_wav, nr), zip(xs, ys, zs), header='x y z', fmt='%d')
-		n = 0
-		_h = np.zeros((zl, yl, xl))
-
-		for i, j, k in zip(xs, ys, zs):
-			print n, i, j, k
-			n += 1
-			_h += 10*prof([z, y, x], [k, j, i], [sigma_wav, rs, rs])
-
-		hdu.data = _h
-		hdu.writeto(f+fhalos, clobber=True)
-
-	fout2 = 'UDF10.norm_halos.%d.fits' % nr
-	if not os.path.isfile(f+fout2):
-		s = 'CubeArit %s%s + %s%s %s%s' % (f, fout1, f, fhalos, f, fout2)
-		print s
-		os.system(s)
-	halos = getdata(f+fout2)
-
-	fout3 = 'ZAP.norm_halos.%d.fits' % nr
-	if not os.path.isfile(f+fout3):
-		os.system('zap %s%s -o %s%s' % (f, fout2, f, fout3))
-	fzap = getdata(f+fout3)
-	frandzap = 'ZAP.norm.%d.fits' % nr
-	fnormzap = getdata(f+frandzap)
-
-	###radprof!!
-	rw = 2
-	zw = 3
-	rads = np.array([0, .5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, 28, 32, 36, 40, 45, 50, 55, 60])
-	asec2pix = 5.
-	rpix = rads*asec2pix
-	npix = len(rpix)
-	n = 0
-	yhalos = []
-	yzap = []
-	ynorm = []
-	ynormzap = []
-	ygal = []
-	for r in range(npix-1):
-		yh = []
-		yz = []
-		yn = []
-		ynz = []
-		for i, j, k in zip(xs, ys, zs):
-			print n, i, j, k
-			n += 1
-			cool = (((x-i)**2+(y-j)**2 >= rpix[r]**2) & ((x-i)**2+(y-j)**2 < rpix[r+1]**2))[0]
-			yh.append(np.nanmean(np.nansum(halos[k-zw:k+zw+1, cool], 1)))
-			yz.append(np.nanmean(np.nansum(fzap[k-zw:k+zw+1, cool], 1)))
-			yn.append(np.nanmean(np.nansum(fnorm[k-zw:k+zw+1, cool], 1)))
-			ynz.append(np.nanmean(np.nansum(fnormzap[k-zw:k+zw+1, cool], 1)))
-		yhalos.append(np.nanmean(yh))
-		yzap.append(np.nanmean(yz))
-		ynorm.append(np.nanmean(yn))
-		ynormzap.append(np.nanmean(ynz))
-
-	r = (rads[1:]+rads[:-1])/2.
-	np.savetxt(f+'sbprof.%d.dat' % nr, zip(r, yhalos, yzap, ynorm, ynormzap), header='radius SB SB_ZAP SB_rand SB_rand_ZAP')
-
-	doplot= True
-
-	if doplot:
-		import matplotlib.pyplot as plt
-		plt.plot(r, yhalos, label='Initial halos')
-		plt.plot(r, yzap, label='ZAP halos')
-		plt.plot(r, ynorm, label='Random')
-		plt.plot(r, ynormzap, label='Random ZAP')
-		plt.plot(r, np.zeros(nr-1), linestyle=':')
-		plt.xlabel('distance [arcsec]')
-		plt.ylabel('flux [arbitrary units]')
-		plt.xlim(3, 60)
-		plt.ylim(-.015, .015)
-		plt.legend()
-		#plt.show()
-		plt.savefig(f+'sbprof.%d.png' % nr)
-		plt.close()
-
+nhi2sb = inter.interp1d(nhi, sb)
+lognhi2sb = inter.interp1d(lognhi, sb)
+sb2nhi = inter.interp1d(sb, nhi)
+nname = f+'UDF10.norm.fits'
+fnoise = getdata(nname)
+zl, yl, xl = fnoise.shape
+#h['NAXIS1'], h['NAXIS2'] = 4096, 4096
+for snap in snaps:
+	print snap
+	erand = f+'snap%d.noise.fits' % snap
+	sb = f+'snap%d.sb.fits' % snap
+	if not os.path.isfile(sb) or overwrite:
+		data = getdata(fin + 'snap%d_x_HM12_512_4096_12_%d_6.73E-03_CaseA.NHI.fits' % (snap, zlens[snap]))
+		zs, ys, xs = data.shape
+		flog = np.log10(data)
+		flog[flog > 23] = 23
+		hdu.data = lognhi2sb(flog)*sbpeaks[snap]
+		hdu.writeto(sb, clobber=True)
+	else: print '%s exists' % sb
+	#h['NAXIS3'] = zlens[snap]
+	#h['CRVAL3'] = lya_rest*(1+redshifts[snap])
+	if 0:
+		if not os.path.isfile(erand) or overwrite:
+			data = getdata(fin + 'snap%d_x_HM12_512_4096_12_%d_6.73E-03_CaseA.NHI.fits' % (snap, zlens[snap]))
+			zs, ys, xs = data.shape
+			frand = np.copy(fnoise)
+			flog = np.log10(data[:, :yl, :xl])
+			flog[flog>23] = 23
+			frand[:zs, :, :] = lognhi2sb(flog)*sbpeaks[snap]#+np.random.normal(size=data.shape)*10.
+			hdu.data = frand
+			hdu.writeto(erand, clobber=True)
+		else:
+			print '%s exists' % erand
+			#frand = getdata(erand)
+		urand = f+'snap%d.udf.fits' % snap
+		if not os.path.isfile(urand) or overwrite: os.system('CubeArit %s - %s %s' % (f+'UDF10.zeros.fits', erand, urand))
+		else: print '%s exists' % urand
+		zrand = f+'snap%d.zap.fits' % snap
+		if not os.path.isfile(zrand): os.system('zap %s -o %s' % (urand, zrand))
