@@ -8,6 +8,7 @@ from sys import argv
 import h5py
 import numpy as np
 from pyfits import getdata, PrimaryHDU
+import params
 
 
 def rdarg(argv, key, type=None, default=None, listtype=int):
@@ -54,9 +55,9 @@ dorandom = rdarg(argv, 'random', bool, False)
 dovar = rdarg(argv, 'dovar', bool, False)
 extraname = rdarg(argv, 'extraname', str, '')
 fitcat = rdarg(argv, key='fitcat', type=str, default='HDFS')  # 'UDF
-folder = rdarg(argv, 'folder', str, '/net/galaxy-data/export/galaxydata/gallegos/')  # '/scratch/gallegos/MUSE/'
+folder = rdarg(argv, 'folder', str, '../../')#'/net/galaxy-data/export/galaxydata/gallegos/')  # '/scratch/gallegos/MUSE/'
 foldercat = rdarg(argv, 'foldercat', str, '../../')  # '/scratch/gallegos/MUSE/'
-folderout = rdarg(argv, 'folderout', str, '/net/galaxy-data/export/galaxydata/gallegos/')
+folderout = rdarg(argv, 'folderout', str, '../../')#'/net/galaxy-data/export/galaxydata/gallegos/')
 galpos = rdarg(argv, 'galpos', bool, False)
 i1 = rdarg(argv, 'id1', int, -1)
 i2 = rdarg(argv, 'id2', int, -1)
@@ -69,6 +70,7 @@ mask = rdarg(argv, 'mask', bool, False)
 norm = rdarg(argv, 'norm', bool, False)
 docat = rdarg(argv, 'docat', bool, False)
 docalc = rdarg(argv, 'docalc', bool, True)
+doimage = rdarg(argv, 'doim', bool, False)
 noshear = rdarg(argv, 'noshear', bool, False)
 overwrite = rdarg(argv, 'overwrite', bool, False)
 outtype = rdarg(argv, 'outtype', str, 'h5')
@@ -79,16 +81,19 @@ nmax = rdarg(argv, 'nmax', int, 9e9)
 randdir = rdarg(argv, 'rdir', bool, False)
 redmin = rdarg(argv, 'rmin', list, [0])
 redmax = rdarg(argv, 'rmax', list, [99])
+remove = rdarg(argv, 'remove', bool, False)
+
 simon = rdarg(argv, 'cubical', bool, True)
 single = rdarg(argv, 'single', bool, False)
 sizemin = rdarg(argv, 'size', int, 1)
 snap = rdarg(argv, 'snap', int, 12)
 thetamin = rdarg(argv, 'thetamin', float, 6)
+type = rdarg(argv, 'type', str, 'LLS')
 r = rdarg(argv, 'rad', int, 50)
-xw = rdarg(argv, 'xw', int, 80)
+xw = rdarg(argv, 'xw', int, 150)
 xmore = rdarg(argv, 'xmore', int, 0)#100 for eagle
-yw = rdarg(argv, 'yw', int, 80)
-zw = rdarg(argv, 'zw', int, 6)
+yw = rdarg(argv, 'yw', int, 150)
+zw = rdarg(argv, 'zw', int, 7)
 zw0 = rdarg(argv, 'zw0', int, 2)
 xmin = rdarg(argv, 'xmin', int, 0)
 ymin = rdarg(argv, 'ymin', int, 0)
@@ -98,9 +103,11 @@ ymax = rdarg(argv, 'ymax', int, 9e9)
 if not extraname: extraname = ''
 if noshear: extraname += '.noshear'
 if not laecentered: extraname += '.pair'
+eagle = fitcat == 'EAGLE'
 
 smask = '.mask' * mask
-extra0 = ('snap%d_%s' % (snap, coord)) * (fitcat == 'EAGLE')
+extra0 = ('snap%d_%s' % (snap, coord)) * eagle
+stype = ('.%s' % type) * eagle
 if galpos: extraname = '.gals'+extraname
 
 now = time.time()
@@ -117,8 +124,9 @@ def doim(outname, px, py, pz, data, xwn, ywn, zwn, xmore=0, binsize=2, sb=True):
 	hdu = PrimaryHDU()
 	hdu.data = f
 	hdu.writeto(outname, clobber=True)
-	hdu.data = np.nansum(f[zw - zw0:zw + zw0 + 1, :, :], 0)
-	hdu.writeto(outname.replace('.fits', '.IM.fits'), clobber=True)
+	if doimage:
+		hdu.data = np.nansum(f[zw - zw0:zw + zw0 + 1, :, :], 0)
+		hdu.writeto(outname.replace('.fits', '.IM.fits'), clobber=True)
 
 
 def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=False):
@@ -131,10 +139,14 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 
 	for i1 in id1:
 
-		name = '%s/%s/gals/%s/%d%s%s.fits' % (folder, fitcat, extra0, i1, extraname, smask)
+		name = '%s/%s/gals/%s/%d%s%s%s.fits' % (folder, fitcat, extra0, i1, extraname, smask, stype)
 		if not os.path.isfile(name):
 			print 'File %s does not exist' % name
 		else:
+			if remove:
+				print 'removing %s' % name
+				os.system('rm %s' % name)
+				continue
 			cube = getdata(name, 0)
 			zl, yl, xl = cube.shape
 			xw, yw, zw = [xl / 2, yl / 2, zl / 2]
@@ -145,8 +157,10 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 			Cl = np.array([zw, yw, xw])
 			for x, y, z, i2 in zip(x2, y2, z2, id2):
 				print 'Pair %d-%d' % (i1, i2)
-				extra1 = ('SB_snap%d_%s' % (snap, coord)) * (fitcat == 'EAGLE')
-				fitsname = '%s/%s/pairs/%s/%d-%d%s%s.fits' % (folder, fitcat, extra1, i1, i2, extraname, smask)
+				extra1 = ('snap%d_%s' % (snap, coord)) * (fitcat == 'EAGLE')
+				dirname = '%s/%s/pairs/%s/' % (folder, fitcat, extra1)
+				if not os.path.isdir(dirname): os.system('mkdir %s' % dirname)
+				fitsname = '%s/%d-%d%s%s.fits' % (dirname, i1, i2, extraname, smask)
 				if not os.path.isfile(fitsname) or imov:
 					if docalc:
 						Cn = np.array([z+zw, y+yw, x+xw])
@@ -186,7 +200,7 @@ def coordconv(id1, id2, x2, y2, z2, xwn=None, ywn=None, zwn=None, xmore=0, norm=
 						pz = data['pz']
 						sb = data['SB']
 	
-					fitsname = '%s/%s/pairs/%s/%d-%d%s%s.fits' % (folder, fitcat, extra1, i1, i2, extraname, smask)
+					fitsname = '%s/%s/pairs/%s/%d-%d%s%s%s.fits' % (folder, fitcat, extra1, i1, i2, extraname, smask, stype)
 					if not os.path.isfile(fitsname) or imov:
 						print 'Making fits!', 2*xwn+1+xmore, 2*ywn+1, 2*zwn+1
 						doim(fitsname, px, py, pz, sb, xwn, ywn, zwn, xmore)
@@ -227,23 +241,23 @@ if fitcat == 'mosaic10':
 if fitcat == 'EAGLE':
 	periodic = '0,0,0'  # ''1,1,1'#
 	dims = 3
-	nz = {'10': 34, '11': 29, '12': 25}
+	nz = params.zlens#{'10': 34, '11': 29, '12': 25}
 	lcube = 4096
 	dovar = False
 	csub = False
-	redshift = 3.5  # 2+(15-snap)/3.
+	redshift = params.redshifts[snap]#3.5  # 2+(15-snap)/3.
 	cat = '%s/EAGLE/cats/gals_snap%d.fits' % (foldercat, snap)
 	data = getdata(cat, 1)
 	ids = data['ID']
 	ngal = len(ids)
 	zs = np.zeros(ngal) + redshift
 	sconf = np.zeros(ngal) + 2
-	cubename = '%s_snap%d_%s%s.fits' % (cubetype, snap, coord, mask * '.mask')  # 'LLS.fits'#'Fluxcube.fits'#
+	cubename = '%s_snap%d_%s.fits' % (cubetype, snap, coord)  # 'LLS.fits'#'Fluxcube.fits'#
 	dovar = False
 	csub = False
-	kpc2arcsec = 0.12750223128904756  # 7.843  pkpc per arcsec
-	pix2kpc = 6.103515625  # ~6 kpc per pixel
-	pix2arcsec = 0.1937778538085323  # 0.7782118608950657/(1+z)
+	kpc2arcsec = 1/params.asec2kpcs[snap]#0.12750223128904756  # 7.843  pkpc per arcsec
+	pix2kpc = 1/params.kpc2pix#6.103515625  # ~6 kpc per pixel
+	pix2arcsec = 1/params.asec2kpcs[snap]#0.1937778538085323  # 0.7782118608950657/(1+z)
 	conv2SB = 1.6512175984082942  # 1/(pix2arcsec)**2
 
 if fitcat == 'mosaic10':
@@ -279,7 +293,7 @@ y2 = data['y2']
 z2 = data['z2']
 if fitcat == 'EAGLE':
 	#check this!!!
-	xl, yl, zl = [501, 501, 21]
+	xl, yl, zl = [301, 301, 201]
 	# xc, yc, zc = [251, 251, 7]
 	dist = data['com_dist']
 	theta = data['theta%s' % coord]

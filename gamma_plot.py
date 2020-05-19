@@ -370,6 +370,14 @@ if 1:
 	zrange = [[2.9, 3.4], [3.4, 4.5], [4.5, 5.5]]
 	zerr = np.array([[abs(zz-zr[0]), abs(zz-zr[1])] for zz, zr in zip(z[aut[i]], zrange)]).T
 
+	# for 6<r<20 with mask2d, with protos
+	g[aut[i]] = [.6, .8]
+	nprob = len(g[aut[i]])
+	gup[aut[i]] = np.zeros(nprob)
+	glo[aut[i]] = (np.array(g[aut[i]])*.3)
+	z[aut[i]] = [3.15, 4.91]
+	zrange = [[2.9, 3.4], [4.5, 5.5]]
+	zerr = np.array([[abs(zz-zr[0]), abs(zz-zr[1])] for zz, zr in zip(z[aut[i]], zrange)]).T
 
 	#Do plot
 
@@ -402,10 +410,10 @@ if 1:
 	p[i] = ax.scatter(z[aut[i]], g[aut[i]], color='red', zorder=14, marker='v', s=100, label=aut[i])
 	plt.errorbar(z[aut[i]], g[aut[i]], yerr=glo[aut[i]], xerr=zerr, uplims=np.zeros(nprob)+1, color='red', ls="none", zorder=14)
 
-	if 0:#detections
+	if 1:#detections
 		
 		p[i] = ax.scatter([3.84], [1.2], color='red', zorder=14, marker='*', s=200)
-		plt.errorbar([3.84], [1.2], yerr=[.45], color='red', ls="none", zorder=14, xerr=0, fmt="none", capsize=4)
+		plt.errorbar([3.84], [1.2], yerr=[.49], color='red', ls="none", zorder=14, xerr=0, fmt="none", capsize=4)
 
 	plt.xlim(-.05, 6.1)
 	plt.ylim(.02, 2)

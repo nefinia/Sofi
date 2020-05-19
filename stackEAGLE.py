@@ -10,7 +10,7 @@ import numpy as np
 from tools_sofi import rdarg, pdfim
 
 
-def sclipping(fits, nsigma, dim=None, mask=None, iter=3):
+def sclipping(fits, nsigma, dim=None, mask=None, iter=3, gmask=None):
 	# print 'Asign nan to values > nsigma in a fits array'
 	for i in range(iter):
 		if dim is None:
@@ -27,7 +27,7 @@ contours = rdarg(argv, 'contours', bool, True)
 dosclip = rdarg(argv, 'dosclip', bool, True)
 extraname = rdarg(argv, 'extraname', str, '')
 fitcat = rdarg(argv, key='fitcat', type=str, default='EAGLE')
-folder = rdarg(argv, 'folder', str, '/net/galaxy-data/export/galaxydata/gallegos/')  # '/scratch/gallegos/MUSE/'
+folder = rdarg(argv, 'folder', str, '../../')  # '/scratch/gallegos/MUSE/'
 foldercat = rdarg(argv, 'foldercat', str, '../../')  # '/scratch/gallegos/MUSE/'
 folderout = rdarg(argv, 'folder', str, '../../')  # '/scratch/gallegos/MUSE/'
 fshear = rdarg(argv, 'flipshear', bool, False)
@@ -36,9 +36,11 @@ imtype = rdarg(argv, 'imtype', str, 'mean')  # 'mean'
 jin = rdarg(argv, 'jin', int, 0)
 makeim = rdarg(argv, 'makeim', bool, True)
 mask = rdarg(argv, 'mask', bool, False)
+gmask = rdarg(argv, 'gmask', bool, False)
+rad = rdarg(argv, 'rad', int, 3)
 makepdf = rdarg(argv, 'makepdf', bool, False)
 overwrite = rdarg(argv, 'overwrite', bool, False)
-parallel = rdarg(argv, 'parallel', bool, True)
+parallel = rdarg(argv, 'parallel', bool, False)
 ncores = rdarg(argv, 'ncores', int, 2)
 prename = rdarg(argv, 'prename', str, '')
 propvar = rdarg(argv, 'pvar', bool, False)
@@ -52,7 +54,8 @@ scliptype = rdarg(argv, 'scliptype', int, 1)
 simon = rdarg(argv, 'cubical', bool, True)
 smooth = rdarg(argv, 'smooth', bool, False)
 std = rdarg(argv, 'std', float, 2)  # 0.0707064#
-
+type = rdarg(argv, 'type', str, 'LLS')
+stype = '.%s' % type
 vmin = rdarg(argv, 'vmin', float, 0)
 vmax = rdarg(argv, 'vmax', float, 0.1)
 
@@ -113,8 +116,8 @@ theta = data['theta%s' % coord]
 fitcats = [fitcat] * len(data)
 nw1 = data['nw1']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids1])
 nw2 = data['nw2']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids2])
-d5th1 = data['n5d1']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids1])
-d5th2 = data['n5d2']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids2])
+d5th1 = data['d5th1']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids1])
+d5th2 = data['d5th2']  # np.array([np.sum(ids1[dclose] == i) + np.sum(ids2[dclose] == i) for i in ids2])
 u1 = data['U1']
 abu1 = np.abs(u1)
 u2 = data['U2']
@@ -154,11 +157,17 @@ if len(close) > 1:
 	dist = dists[close]
 	theta = theta[close]
 	lst = []
-
+	if gmask: glst = []
 
 	for i in range(len(id1)):
-		pair = '%s/%s/pairs/SB_snap%d_%s/%d-%d%s%s.fits' % (folder, fcat[i], snap, coord, id1[i], id2[i], prename, smask)
-		if os.path.isfile(pair): lst.append(pair)
+		pair = '%s/%s/pairs/snap%d_%s/%d-%d%s%s%s.fits' % \
+		       (folder, fcat[i], snap, coord, id1[i], id2[i], prename, smask, stype)
+		lst.append(pair)
+		if gmask:
+			gpair = '%s/%s/pairs/snap%d_%s/%d-%d%s%s%s.fits' % \
+			       (folder, fcat[i], snap, coord, id1[i], id2[i], prename, smask, '.gmask%d' % rad)
+			glst.append(gpair)
+		
 
 	nstack = len(lst)
 	print '\n Number of existing subcubes to be stacked', nstack
@@ -181,65 +190,39 @@ if len(close) > 1:
 	## Stacking part ##
 	###################
 	print 'Stacking part!'
-	stackname = '%s/stack.fits' % foldername
+	stackname = '%s/stack%s.fits' % (foldername, stype)
 	nstack = len(lst)
 
 	if not os.path.isfile(stackname) or overwrite:
 		fits = np.array([getdata(l) for l in lst])
-
-		if imtype == 'mean':
+		f = np.nanmean(fits, 0)
+		std = np.nanstd(fits, 0)
+		hdu.data = f
+		hdu.writeto(stackname, clobber=True)
+		hdu.data = std
+		hdu.writeto(stackname.replace('.fits', '.STD.fits'), clobber=True)
+		if gmask:
+			gfits = np.array([getdata(l) for l in glst])
+			gf = gfits>0
+			fits[gfits>0] = np.nan
 			f = np.nanmean(fits, 0)
+			hdu.data = f
+			hdu.writeto(stackname.replace('.fits', '.g%d.fits' % rad), clobber=True)
 			std = np.nanstd(fits, 0)
-		if imtype == 'median': f = np.nanmedian(fits, 0)
+			hdu.data = std
+			hdu.writeto(stackname.replace('.fits', '.g%d.STD.fits' % rad), clobber=True)
+			gmean = np.nanmean(gf, 0)
+			hdu.data = gmean
+			hdu.writeto(stackname.replace('.%s.fits' % type, '.gmask%d.fits' % rad), clobber=True)
+			gstd = np.nanstd(gf, 0)
+			hdu.data = gmean
+			hdu.writeto(stackname.replace('.%s.fits' % type, '.gmask%d.STD.fits' % rad), clobber=True)
 		zl, yl, xl = f.shape
 
 	else:
 		f = getdata(stackname)
 		zl, yl, xl = f.shape
 
-	if parallel:
-		fcomb = None
-		stdcomb = None
-		if rank == 0:
-			fcomb = np.empty((size, zl, yl, xl), dtype='d')
-			stdcomb = np.empty((size, zl, yl, xl), dtype='d')
-		comm.Gather(f, fcomb, root=0)
-		comm.Gather(std, stdcomb, root=0)
-		if rank == 0:
-			fcomb = np.nanmean(fcomb, 0)
-			stdcomb = np.nanmean(stdcomb, 0)
-			hdu.data = fcomb
-			hdu.writeto(stackname, clobber=True)
-			hdu.data = stdcomb
-			hdu.writeto(stackname.replace('.fits', '.STD.fits'), clobber=True)
-			hdu.data = np.nanmean(fcomb[zl / 2-zw0:zl/2+zw0+1, :, :], 0)
-			hdu.writeto(stackname.replace('.fits', '.IM.fits'), clobber=True)
-		if 0:
-			if rank != 0:
-				comm.send(f.shape, dest=0)
-				comm.Send(f, dest=0)
-			else:
-				print 'Combining all %d cores stacks' % size
-				fs = [f]
-				for i in range(size-1):
-					print 'Receiving file from %d' % rank
-					shape = comm.recv(source=i+1)
-					print 'Shape of data to receive:', shape
-					_f = np.empty(shape, dtype='d')  # allocate space to receive the array
-					comm.Recv(_f, source=0)
-					fs.append(_f)
-				if imtype == 'mean':
-					f = np.nanmean(fs, 0)
-					std = np.nanstd(fs, 0)
-					hdu.data = std
-					hdu.writeto(stackname.replace('.fits', '.STD.fits'), clobber=True)
-				if imtype == 'median': f = np.nanmedian(fs, 0)
-				zl, yl, xl = f.shape
-				hdu.data = f
-				hdu.writeto(stackname, clobber=True)
-				hdu.data = np.nanmean(f[zl / 2 - zw0:zl / 2 + zw0 + 1, :, :], 0)
-			hdu.writeto(stackname.replace('.fits', '.IM.fits'), clobber=True)
-			
 	print 'stacks shape', xl, yl, zl
 
 	if 0:

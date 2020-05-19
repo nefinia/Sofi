@@ -157,9 +157,10 @@ zprob = [[2.9, 3.9]]
 sncat = ['_59_263']
 
 
-zprob = [[3.4, 4.5]]
-zreal = [3.89]
-sncat = ['_46_242']
+zprob = [[2.9, 3.4]]
+zreal = [3.15]
+sncat = ['_33_140']
+
 
 
 zprob = [[2.9, 3.4], [3.4, 4.5], [4.5, 5.5]]
@@ -168,10 +169,9 @@ sncat = ['_33_140', '_46_242', '_43_162']
 
 
 
-
-# all rads probed
-rads = [[0, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 10], [10, 12], [12, 16], [8, 16], [12, 20]]
-
+zprob = [[3.4, 4.5]]
+zreal = [3.89]
+sncat = ['_46_242']
 
 extraname += prename
 
@@ -212,20 +212,28 @@ for i in range(len(zprob)):
 
 
 	mat['%.2f' % zp] = np.loadtxt(odat)
-	r, r0, r1, zwi, z, sb, std, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zp].T
+	r, r0, r1, zwi, z, sb, std, sbmean, fc, flls, flls_uplim, gammac, gamma_uplimc, gmean, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zp].T
 	#vmin, vmax = 2.99792458e5*zmin*1.25/1215.67/(1+_zreal), 2.99792458e5*zmax*1.25/1215.67/(1+_zreal)
 	vmin, vmax = -vlim, vlim
 	v0 = v[(zwi==0) & (z==zoff-zw0)][0]
 	v1 = v[(zwi==0) & (z==zoff+zw0)][0]
-	print 'Velocity window %.2f +%.2f dv %.2f km/s' % (v0, v1, v1-v0)
 	c = (zwi==zw0) & (z==zoff)
-	x, y, xerr, yerr = r[c], sb[c], [r[c]-r0[c], r1[c]-r[c]], [std[c], std[c]]
+
+	ignore = [8, 10], [10, 12], [12, 16], [6, 10], [6, 12], [12, 18], [10, 16], [6, 20]
+
+	for ig in ignore: c &= ~((r0 == ig[0]) & (r1 == ig[1]))
+
+	sbm = (sbmean[c]*zwi[c])[0]
+	print 'Velocity window %.2f +%.2f dv %.2f km/s' % (v0, v1, v1-v0)
+	print 'Base SB for this window', sbm
+	x, y, xerr, yerr = r[c], sb[c]+sbm, [r[c]-r0[c], r1[c]-r[c]], [std[c], std[c]]
 	y[y<=0] = 1e-3
 	ax.scatter(x, y, label=r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}]}}$', color='green')
 	ax.errorbar(x, y, yerr=yerr, xerr=xerr, fmt='none', color='green')
 	y = fc[c]
 	ax.scatter(x, y, label=r'$\mathrm{f_{LLS}}$', color='blue')
-	y, yerr = gamma[c], [gamma_uplim[c]/2., gamma_uplim[c]/2.]
+	gm = (gmean[c]*zwi[c])[0]
+	y, yerr = gamma[c]+gm, [gamma_uplim[c]/2., gamma_uplim[c]/2.]
 	y[y <= 0] = 1e-3
 	ax.scatter(x, y, label=r'$\mathrm{\Gamma_{HI}\,[10^{-12}\,s^{-1}}]}$', color='gold', zorder=0)
 	ax.errorbar(x, y, yerr=yerr, fmt='none', color='gold')
@@ -233,14 +241,15 @@ for i in range(len(zprob)):
 	
 	w=1./gamma_uplim[c][5:]
 	wsum=np.sum(w)
-	gmean = np.nansum(gamma[c][5:]*w)/wsum
+	_gmean = np.nansum(gamma[c][5:]*w)/wsum
 	gstd = np.std(gamma[c][5:])
-	for rr, g, gup in zip(r[c], gamma[c], gamma_uplim[c]/2.): print 'r %.2f G %.2f +- %.2f' % (rr, g, gup)
-	print 'Mean weighted G %.2f +- %.2f' % (gmean, gstd)
+	for r0_, r1_, rr, g, gup in zip(r0[c], r1[c], r[c], gamma[c], gamma_uplim[c]/2.):
+		print 'r%d-%d %.2f G %.2f +- %.2f' % (r0_, r1_, rr, g+gm, gup)
+	print 'Base G %.2e, Mean weighted G %.2f +- %.2f' % (gm, _gmean+gm, gstd)
 	
 	#plt.ylabel(r'$\mathrm{SB_{Ly\alpha}\,[10^{-20}erg\,s^{-1}cm^{-2}arcsec^{-2}]}}$', fontsize=fsize)
 	plt.xlim([0, 20])
-	plt.ylim([5e-2, 5e1])
+	plt.ylim([5e-2, 6e1])
 	plt.xticks(fontsize=fsize-2)
 	plt.yticks(fontsize=fsize-2)
 	plt.title('z=%.1f' % _zreal, fontsize=fsize)

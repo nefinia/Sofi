@@ -81,7 +81,7 @@ nhi_fit = {}
 nhi_fit['HM01'] = params.nhi_fit['HM01']
 nhi_fit['HM12'] = params.nhi_fit['HM12']
 fLLScorr = params.fLLScorr
-
+dndz_eagle = params.dndz_eagle
 
 lcube = maxres # 4096
 coml = 25  # cMpc
@@ -157,24 +157,19 @@ protos = []#[3.45, 3.5], [3.65, 3.75], [4.5, 4.6]]
 zprob = [[3.467, 3.476], [3.687, 3.731], [4.496, 4.53]]
 zprob = [[3.45, 3.5], [3.65, 3.75], [4.45, 4.55]]
 zprob = [[3.65, 3.75]]
-#protos = [[3.467, 3.476], [3.687, 3.731]]#[3.65, 3.75]]#3.687, 3.731]]
-#zprob = [[3.6, 4.6], [3.8, 4.8]]
-#zprob = [[2.8, 3.5], [3.5, 4.2], [4.2, 4.9], [4.9, 5.6]]#[2.8, 3.2]
-#zprob = [[2.9, 3.5], [3.5, 4.5], [4.5, 5.], [5, 6]]#[[2.9, 3.5], [3.5, 4.7], [4.7, 6]]#, [5, 6], [5.5, 6.6]]
-#zprob = [[2.9, 4], [4, 5], [5, 6.6]]
-#zprob = [[2.9, 3.5], [3.5, 4.5], [4.5, 5.5]]#[[2.9, 3.5], [3.5, 4.7], [4.7, 6]]#, [5, 6], [5.5, 6.6]]
+#protNAXIS3b = [[2.9, 3.5], [3.5, 4.5], [4.5, 5.5]]#[[2.9, 3.5], [3.5, 4.7], [4.7, 6]]#, [5, 6], [5.5, 6.6]]
 
 #last:
-zprob = [[3.4, 4.5]]
-zprob = [[3.4, 4.5], [2.9, 3.4], [4.5, 5.5], [5.5, 6.5]]#[2.8, 3.2]
+zprob = [[2.9, 3.4], [3.4, 4.5], [4.5, 5.5], [5.5, 6.5]]#[2.8, 3.2]
+#zprob = [[5.5, 6.5]]
 protos = [[3.467, 3.476], [3.687, 3.731]]
 
 #zprob = [[4.4, 5.4], [4.5, 5.5]]
 #zprob = [[3.8, 4.6]]
 # all rads probed
-rads = [[0, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 10], [10, 12], [8, 16], [12, 16], [12, 20]]
+rads = [[0, 1], [1, 2], [2, 4], [4, 6], [6, 8], [8, 10], [6, 10], [6, 12], [8, 12], [8, 16], [10, 16], [12, 20], [6, 20]]
 # rads for each redshift spectra plot
-rsel = [4, 6], [6, 8], [8, 10], [10, 12], [8, 16], [12, 16], [12, 20]#, [12, 20]  # , [8, 20], [8, 14]
+rsel = [4, 6], [6, 8], [8, 10], [10, 16], [8, 12], [8, 16], [12, 20], [6, 20]#, [12, 20]  # , [8, 20], [8, 14]
 # rads for each rad spectra plot
 rsel2 = rads#[4, 6], [6, 8], [8, 10], [6, 12], [12, 20], [6, 20], [8, 20]# [12, 20], [6, 20]
 ylim = 1/np.array(rads).astype(float).T[1]
@@ -465,6 +460,9 @@ for i in range(len(zprob)):
 			sbpeak = sbpeaks[s[0]] * (1 - m) + sbpeaks[s[1]] * m
 			_gamma12 = gamma_bkg['HM12'][s[0]][0] * (1 - m) + gamma_bkg['HM12'][s[1]][0] * m
 			_gamma01 = gamma_bkg['HM01'][s[0]][0] * (1 - m) + gamma_bkg['HM01'][s[1]][0] * m
+			_dndz = dndz_eagle[s[0]]*(1-m)+dndz_eagle[s[0]]*m
+			_dz = params.dz0#dz[s[0]]*(1-m)+dz[s[0]]*m
+			sbmean = sbpeak*_dndz*_dz
 			zle, yle, xle = feagle.shape
 			zle0 = zle
 			_a = [asec2kpcs[_s] * (1 + redshifts[_s]) * kpc2pix for _s in s]
@@ -475,7 +473,9 @@ for i in range(len(zprob)):
 			#sb2gfac = .001268 #.677/1.27/4.528**4, for HM12
 			RHM12, RHM12thin, SBHM12, gamma_HM12 = UVBcalc(_zreal)
 			sb2gamma = gamma_HM12*1e-8/SBHM12#sb2gfac*(1+_zreal)**4
-			print 'SB to Gamma for z %.3f' % _zreal, sb2gamma
+			gmean = sb2gamma*sbmean
+			print 'SB to Gamma %.2f mean %.2e for z %.2f SB peak %.2f mean %.2e' % \
+				  (sb2gamma, gmean,	_zreal, sbpeak, sbmean)
 
 		if do_rand:
 			yr, xr = np.ogrid[0: ylr, 0: xlr]
@@ -595,12 +595,12 @@ for i in range(len(zprob)):
 							fyc = fin*flux2sb/fc
 							gamma = fy*sb2gamma
 							gammac = fyc*sb2gamma
-							mat['%.2f' % zp].append([rr, i, j, _zw, _zoff, sb, noise, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v])
+							mat['%.2f' % zp].append([rr, i, j, _zw, _zoff, sb, noise, sbmean, fc, flls, flls_uplim, gammac, gamma_uplimc, gmean, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v])
 						else:
 							mat['%.2f' % zp].append([(i+j)/2., i, j, _zw, _zoff, sb, noise, sbr])
 
 			mat['%.2f' % zp] = np.array(mat['%.2f' % zp])
-			if do_eagle: header = 'r r0 r1 zw z SB SB_std fcorr fLLS fLLS_uplim Gamma Gamma_uplim SNR SB_rand fEAGLE GammaEAGLE Gamma_uplimEAGLE SB_HM12 v'
+			if do_eagle: header = 'r r0 r1 zw z SB SB_std SB_mean fcorr fLLS fLLS_uplim Gamma Gmean Gamma_uplim SNR SB_rand fEAGLE GammaEAGLE Gamma_uplimEAGLE SB_HM12 v'
 			else: header = 'r r0 r1 zw z SB SB_std SB_rand'
 
 			np.savetxt(odat, mat['%.2f' % zp], header=header)
@@ -613,7 +613,7 @@ for i in range(len(zprob)):
 
 	fig, ax = plt.subplots(figsize=figsize)
 
-	r, r0, r1, zwi, z, sb, std, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zp].T
+	r, r0, r1, zwi, z, sb, std, sbmean, fc, flls, flls_uplim, gammac, gamma_uplimc, gmean, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zp].T
 	zmin, zmax = -50, 50
 	#vmin, vmax = 2.99792458e5*zmin*1.25/1215.67/(1+_zreal), 2.99792458e5*zmax*1.25/1215.67/(1+_zreal)
 	vmin, vmax = -vlim, vlim
@@ -673,7 +673,7 @@ for rr, ylim in zip(rsel2, ylims):
 		_zp = zrealp['%.2f' % zpm]
 		ncat = ncats['%.2f' % zpm]
 		sred += '_%d' % (_zp*10)
-		r, r0, r1, zwi, z, sb, std, fc, flls, flls_uplim, gammac, gamma_uplimc, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zpm].T
+		r, r0, r1, zwi, z, sb, std, sbmean, fc, flls, flls_uplim, gammac, gamma_uplimc, gmean, snr, sbr, fe, gamma, gamma_uplim, sbhm12, v = mat['%.2f' % zpm].T
 		c = (zwi == _zw)&(r0 == rr[0])&(r1 == rr[1])&(np.abs(v) <= vlim)
 		ax.plot(v[c], sp.savgol_filter(sb[c]/1.25, 5, 1), label=r'$z=%.1f$' % _zp, color=colors[i])
 		cout = (zwi == _zw) & (r0 == rr[0]) & (r1 == rr[1]) & (np.abs(v) > 1000)
